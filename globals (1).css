@@ -1,0 +1,134 @@
+@import "tailwindcss";
+
+/* ==========================================================================
+   Painel Rede Vegas Ativa - tokens de design
+   Marca amostrada de Logo_Colorido_4x_1.png
+
+   REGRA: a marca pinta a interface, nunca o dado.
+   Cores --color-brand-* sao para navegacao, acoes e momentos de marca.
+   Cores --color-status-* sao exclusivas de mapa, badges e indicadores.
+   Nunca use uma no papel da outra: o consultor precisa distinguir
+   "reservado" de "botao do sistema" olhando a tela sob sol.
+   ========================================================================== */
+
+@theme {
+  /* --- Marca ------------------------------------------------------------ */
+  --color-brand-indigo: #4850a0;   /* contorno e wordmark do logo */
+  --color-brand-deep: #2e3468;     /* topbar, texto de alto contraste */
+  --color-brand-violet: #7169ad;   /* inicio do gradiente */
+  --color-brand-mauve: #a87e98;    /* meio do gradiente */
+  --color-brand-coral: #d58f87;    /* fim do gradiente - decorativo, contraste baixo */
+  --color-brand-tint: #eef0f8;     /* fundo de estado ativo/selecionado */
+
+  /* --- Neutros ---------------------------------------------------------- */
+  --color-surface: #ffffff;
+  --color-surface-sunken: #f7f7fb;
+  --color-border: #e3e3ee;
+  --color-border-strong: #c9c9d8;
+  --color-ink: #16162b;
+  --color-ink-muted: #62627a;
+
+  /* --- Status transacional (recencia) ----------------------------------- */
+  --color-status-recente: #0e8a47;  /* 0-30 dias */
+  --color-status-atencao: #c89000;  /* 31-60 dias */
+  --color-status-acao: #e2660a;     /* 61-90 dias */
+  --color-status-critico: #c42b2b;  /* > 90 dias */
+  --color-status-nunca: #8a8a9e;    /* nunca transacionou */
+
+  /* --- Status de visita e operacional ----------------------------------- */
+  --color-status-reservado: #0e7fa8; /* ciano deliberado: nao colide com o indigo */
+  --color-status-pendencia: #7b2cbf; /* roxo saturado: nao colide com o violeta */
+  --color-status-bloqueado: #1a1a24;
+
+  /* --- Feedback de sistema ---------------------------------------------- */
+  --color-danger: #c42b2b;
+  --color-success: #0e8a47;
+
+  /* --- Tipografia -------------------------------------------------------- */
+  --font-brand: "Quicksand", ui-rounded, system-ui, sans-serif;
+  --font-sans: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  /* --- Raio: ecoa o cartao do logo -------------------------------------- */
+  --radius-card: 0.75rem;
+  --radius-pill: 999px;
+}
+
+/* --------------------------------------------------------------------------
+   Base
+   -------------------------------------------------------------------------- */
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  background: var(--color-surface-sunken);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Identificadores conferidos contra a fachada em campo (CNPJ, contrato,
+   terminal) sao monoespacados: conferencia digito a digito depende disso. */
+.identificador {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+/* Contadores e datas em lista alinham verticalmente. */
+.numerico {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Gradiente da marca, na direcao do logo. Uso restrito:
+   cabecalho de acao, tela de login, estado vazio. Nunca atras de texto denso. */
+.gradiente-vegas {
+  background: linear-gradient(
+    100deg,
+    var(--color-brand-violet) 0%,
+    var(--color-brand-mauve) 55%,
+    var(--color-brand-coral) 100%
+  );
+}
+
+/* --------------------------------------------------------------------------
+   Acessibilidade
+   -------------------------------------------------------------------------- */
+
+/* Foco visivel sempre. O painel e operado por teclado no desktop
+   pelo supervisor e pelo administrativo. */
+:focus-visible {
+  outline: 2px solid var(--color-brand-indigo);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Verde/laranja/vermelho e a combinacao mais dificil para daltonismo.
+   O marcador do mapa nunca comunica so por cor: leva tambem anel e icone.
+   Esta classe e o anel; o icone entra no componente do marcador. */
+.marcador-anel {
+  box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 3.5px currentColor;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Alvo de toque minimo em campo: 44px. O consultor usa o painel
+   em pe, com uma mao, muitas vezes com o celular na horizontal do balcao. */
+@media (pointer: coarse) {
+  button,
+  a[role="button"],
+  [role="tab"] {
+    min-height: 44px;
+  }
+}
