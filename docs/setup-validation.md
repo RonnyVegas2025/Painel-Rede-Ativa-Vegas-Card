@@ -137,25 +137,19 @@ administrativo. Use o Studio.
 Promova a gestor master no **SQL Editor**:
 
 ```sql
-begin;
-select set_config('request.jwt.claims', '{"user_role":"gestor_master"}', true);
 update public.profiles set role = 'gestor_master' where email = 'gestor@vegas.local';
-commit;
 ```
 
-> **Por que a linha do `set_config`.** A trigger `fn_protect_profile_fields` só
-> libera troca de papel para quem `auth_role()` reconhece como `gestor_master`, e
-> `auth_role()` lê o JWT. Numa conexão direta — SQL Editor, `psql`, migration —
-> não há JWT, então ela devolve `consulta` (o padrão seguro do ADR 0005) e o
-> `update` falha com *"Alteracao de papel exige gestor_master"*. Trigger não é
-> RLS: superusuário não passa por cima.
+> **Por que isto funciona pelo SQL Editor e não pela API.** A trigger
+> `fn_protect_profile_fields` libera troca de papel para `gestor_master` e para
+> conexão sem contexto HTTP — `psql`, SQL Editor, migration, seed. É o caminho de
+> bootstrap: sem ele, trocar papel exigiria já ser gestor master, e ninguém é
+> numa instalação nova (migration 0013).
 >
-> Sem essa linha não existe caminho para criar o primeiro administrador — trocar
-> papel exige ser gestor master, e ninguém é. O `set_config` com o terceiro
-> argumento `true` vale só até o fim da transação.
->
-> Isto é contorno, não solução: está aberto em `docs/validacao-sprint0.md` (B-4),
-> à espera de decisão sobre como a trigger deve tratar conexão direta.
+> Pela API a proteção é integral. O PostgREST sempre popula `request.jwt.claims`,
+> inclusive em requisição anônima, então nenhuma chamada HTTP alcança a exceção —
+> `service_role` incluído, porque seu token não traz `user_role`. Verificado na
+> V8.
 
 Crie mais dois para testar permissões:
 

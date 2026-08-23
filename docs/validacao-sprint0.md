@@ -33,14 +33,13 @@ do host usado e derrubava o `supabase start` inteiro.
 | V5 | claim do JWT coincide com o perfil | passou, **após B-2** |
 | V6 | nenhuma policy `FOR ALL` · `audit_logs` sem escrita | passou |
 | V7 | consultor não altera parâmetro | passou, **após B-1** |
-| V8 | consultor não se promove, mas edita o próprio nome | passou |
+| V8 | consultor não se promove, mas edita o próprio nome | passou, **e após B-4** |
 | V9 | auditoria grava alteração de parâmetro | passou |
 | V10 | login, redirecionamentos e mensagem de erro | passou, **após B-6** |
 | V11 | diagnóstico com seis linhas verdes | passou, **após B-1** |
 | V12 | 268 Vitest · typecheck · lint · 4 pgTAP | passou, **após B-3, B-5, B-7** |
 
-Doze de doze, com oito correções pelo caminho. Um defeito segue aberto por ser
-fronteira de segurança e depender de decisão: B-4.
+Doze de doze, com nove correções pelo caminho. Nenhum defeito em aberto.
 
 ### V4 — o critério de aceite número um
 
@@ -117,7 +116,7 @@ Importado por `nav-items.ts`, `topbar.tsx`, `forbidden-state.tsx` e
 em `^0.460.0` — é a biblioteca que o UI Standard torna obrigatória, então isto é
 restaurar declaração ausente, não adicionar dependência.
 
-### B-4 — Não há como criar o primeiro gestor master · **aberto**
+### B-4 — Não havia como criar o primeiro gestor master · **crítico**
 
 O passo 5 de `setup-validation.md` manda rodar, no SQL Editor:
 
@@ -133,16 +132,21 @@ ela devolve `consulta` (o padrão seguro do ADR 0005, correto em si). Trigger n�
 
 Instalação nova nasce sem administrador e sem caminho para criar um.
 
-Contorno documentado no passo 5: injetar a claim na transação com
-`set_config('request.jwt.claims', '{"user_role":"gestor_master"}', true)`.
+O ponto de fundo: **qualquer um com acesso direto ao banco já contornava a
+trigger em uma linha**, com
+`set_config('request.jwt.claims', '{"user_role":"gestor_master"}', true)`. A
+barreira nunca protegeu contra conexão direta — apenas travava o procedimento
+documentado.
 
-O contorno expõe o ponto de fundo: **qualquer um com acesso direto ao banco já
-podia fazer isso em uma linha.** A trigger nunca protegeu contra conexão direta —
-apenas travava o procedimento documentado. Pela API a proteção é real e
-continua: o PostgREST sempre popula `request.jwt.claims`.
+Corrigido em `20260823000013_profile_bootstrap.sql`: a exceção passa a cobrir
+também a ausência de contexto PostgREST, que é o que caracteriza acesso direto.
+Isso não afrouxa a proteção, torna-a honesta.
 
-Decisão pendente sobre como a trigger deve tratar ausência de contexto HTTP.
-Não alterada nesta rodada por ser fronteira de segurança.
+Pela API nada muda, e foi verificado: consultor autenticado recebe
+`Alteracao de papel exige gestor_master`; **`service_role` também**, porque seu
+token traz claims sem `user_role` e portanto não alcança a exceção; e mudar o
+próprio nome continua funcionando. O passo 5 do guia agora roda como está
+escrito.
 
 ### B-5 — `@supabase/ssr` incompatível com `supabase-js` · **impede o typecheck**
 
