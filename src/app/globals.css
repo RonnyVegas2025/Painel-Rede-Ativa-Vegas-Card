@@ -1,0 +1,147 @@
+@import "tailwindcss";
+@import "../styles/tokens.css";
+
+/* ==========================================================================
+   Painel Rede Vegas Ativa — consumo local dos tokens
+   Padrão consumido: VEGAS-PLATFORM-UI-STANDARD.md v1.0
+
+   Este arquivo NÃO define cor. Ele apenas expõe os tokens canônicos de
+   styles/tokens.css ao Tailwind v4, que exige o prefixo --color-* dentro de
+   @theme para gerar as utilidades. A fonte de verdade continua sendo --vg-*.
+   ========================================================================== */
+
+@theme inline {
+  --color-brand-50: var(--vg-brand-50);
+  --color-brand-100: var(--vg-brand-100);
+  --color-brand-400: var(--vg-brand-400);
+  --color-brand-500: var(--vg-brand-500);
+  --color-brand-600: var(--vg-brand-600);
+  --color-brand-700: var(--vg-brand-700);
+  --color-brand-800: var(--vg-brand-800);
+
+  --color-background: var(--vg-background);
+  --color-surface: var(--vg-surface);
+  --color-surface-muted: var(--vg-surface-muted);
+  --color-ink: var(--vg-ink);
+  --color-ink-secondary: var(--vg-ink-secondary);
+  --color-ink-on-brand: var(--vg-ink-on-brand);
+  --color-ink-on-brand-secondary: var(--vg-ink-on-brand-secondary);
+
+  --color-border: var(--vg-border);
+  --color-border-field: var(--vg-border-field);
+
+  --color-success-bg: var(--vg-success-bg);
+  --color-success-fg: var(--vg-success-fg);
+  --color-warning-bg: var(--vg-warning-bg);
+  --color-warning-fg: var(--vg-warning-fg);
+  --color-danger-bg: var(--vg-danger-bg);
+  --color-danger-fg: var(--vg-danger-fg);
+  --color-info-bg: var(--vg-info-bg);
+  --color-info-fg: var(--vg-info-fg);
+  --color-neutral-bg: var(--vg-neutral-bg);
+  --color-neutral-fg: var(--vg-neutral-fg);
+  --color-partial-bg: var(--vg-partial-bg);
+  --color-partial-fg: var(--vg-partial-fg);
+  --color-suspended-bg: var(--vg-suspended-bg);
+  --color-suspended-fg: var(--vg-suspended-fg);
+
+  --radius-sm: var(--vg-radius-sm);
+  --radius-md: var(--vg-radius-md);
+  --radius-lg: var(--vg-radius-lg);
+  --radius-pill: var(--vg-radius-pill);
+
+  --font-display: var(--vg-font-display);
+  --font-sans: var(--vg-font-sans);
+
+  --text-display-xl: var(--vg-text-display-xl);
+  --text-display-xl--line-height: var(--vg-leading-display-xl);
+  --text-h1: var(--vg-text-h1);
+  --text-h1--line-height: var(--vg-leading-h1);
+  --text-h2: var(--vg-text-h2);
+  --text-h2--line-height: var(--vg-leading-h2);
+  --text-h3: var(--vg-text-h3);
+  --text-h3--line-height: var(--vg-leading-h3);
+  --text-body: var(--vg-text-body);
+  --text-body--line-height: var(--vg-leading-body);
+  --text-body-sm: var(--vg-text-body-sm);
+  --text-body-sm--line-height: var(--vg-leading-body-sm);
+  --text-caption: var(--vg-text-caption);
+  --text-caption--line-height: var(--vg-leading-caption);
+}
+
+/* --------------------------------------------------------------------------
+   Base
+   -------------------------------------------------------------------------- */
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  background: var(--vg-background);
+  color: var(--vg-ink);
+  font-family: var(--vg-font-sans);
+  font-size: var(--vg-text-body);
+  line-height: var(--vg-leading-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Identificadores conferidos contra a fachada em campo (CNPJ, contrato,
+   terminal) e valores em tabela usam algarismos tabulares (§4.1). O Inter
+   entrega largura fixa de dígito, que é o que sustenta a conferência dígito a
+   dígito — não é preciso uma família monoespaçada só para isso. */
+.identificador,
+.numerico {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+.identificador {
+  letter-spacing: 0.01em;
+}
+
+/* Assinatura institucional (§3.2). Faixa fina apenas: nunca fundo de card,
+   botão, KPI ou qualquer área grande. */
+.faixa-gradiente {
+  background: var(--vg-gradient);
+}
+
+/* --------------------------------------------------------------------------
+   Acessibilidade (§20)
+   -------------------------------------------------------------------------- */
+
+:focus-visible {
+  outline: 2px solid var(--vg-brand-500);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Sobre superfície escura o foco em Brand 500 desaparece. */
+.sobre-marca :focus-visible {
+  outline-color: var(--vg-ink-on-brand);
+}
+
+/* O marcador do mapa nunca comunica só por cor: leva também anel e ícone. */
+.marcador-anel {
+  box-shadow: 0 0 0 2px var(--vg-surface), 0 0 0 3.5px currentColor;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Alvo de toque mínimo em campo: 44 px. O consultor opera em pé, com uma mão. */
+@media (pointer: coarse) {
+  button,
+  a[role="button"],
+  [role="tab"] {
+    min-height: 44px;
+  }
+}

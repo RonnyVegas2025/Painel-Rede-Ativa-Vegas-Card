@@ -1,0 +1,39 @@
+project_id = "painel-rede-vegas-ativa"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:3000"
+additional_redirect_urls = ["http://127.0.0.1:3000/auth/callback"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+enable_signup = false          # criacao de usuario e ato administrativo, nao autosservico
+
+[auth.email]
+enable_signup = false
+enable_confirmations = true
+
+# Injeta user_role no JWT. Sem isso, toda policy cai para 'consulta' e o sistema
+# fica inutilizavel de um jeito silencioso. Ver ADR 0005.
+[auth.hook.custom_access_token]
+enabled = true
+uri = "pg-functions://postgres/public/custom_access_token_hook"
+
+[storage]
+enabled = true
+file_size_limit = "20MiB"

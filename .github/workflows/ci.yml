@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push: { branches: [main] }
+  pull_request:
+
+jobs:
+  aplicacao:
+    name: Tipos, lint e testes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run test
+
+  banco:
+    name: Migrations e pgTAP
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with: { version: latest }
+      # Sobe o stack local, aplica todas as migrations e roda o seed.
+      - run: supabase db start
+      # Policy, constraint e trigger so se verificam de dentro do banco.
+      - run: supabase test db

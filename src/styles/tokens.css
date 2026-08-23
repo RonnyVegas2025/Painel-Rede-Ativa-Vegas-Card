@@ -1,0 +1,103 @@
+/* ==========================================================================
+   Vegas Platform — tokens canônicos
+   Conforme VEGAS-PLATFORM-UI-STANDARD.md v1.0
+
+   ESTE É O ÚNICO ARQUIVO DO PROJETO QUE PODE CONTER HEXADECIMAL.
+   Componentes consomem via var(). Ver PLATFORM-STANDARDS.md §2.
+
+   Não contém nada específico do Painel Rede Vegas Ativa: quando existir
+   @vegas/tokens, este arquivo sai daqui sem uma linha de alteração.
+   ========================================================================== */
+
+:root {
+  /* --- Marca ----------------------------------------------------------- */
+  --vg-brand-50: #eeeff7;   /* fundo do item ativo da sidebar */
+  --vg-brand-100: #dcdef0;
+  --vg-brand-400: #6e68ae;  /* violeta — início do gradiente */
+  --vg-brand-500: #4d56a1;  /* primária: botão, link, item ativo */
+  --vg-brand-600: #434b8f;
+  --vg-brand-700: #3a4183;  /* painel institucional do login */
+  --vg-brand-800: #2c3164;  /* títulos de alto contraste */
+
+  --vg-rose-400: #9e7a9c;   /* meio do gradiente — uso controlado */
+  --vg-peach-400: #d69086;  /* fim do gradiente — decorativo restrito */
+  --vg-peach-600: #9e5445;  /* corrigido de #A85C4E para atingir AA (§3.1) */
+
+  /* --- Superfícies e texto --------------------------------------------- */
+  --vg-background: #f5f5fa;
+  --vg-surface: #ffffff;
+  --vg-surface-muted: #f0f0f6;   /* cabeçalho de tabela */
+  --vg-ink: #1c1f3b;
+  --vg-ink-secondary: #494d6e;   /* substitui o antigo ink-muted (§3.1) */
+  --vg-ink-on-brand: #ffffff;
+  /* Amostrado da referência de Agregados como #A0A2C3, que mede 3,73:1 sobre
+     Brand 700 e reprova em AA. Clareado para 4,97:1 sem perder a hierarquia. */
+  --vg-ink-on-brand-secondary: #babcd6;
+
+  /* --- Bordas ----------------------------------------------------------- */
+  --vg-border: #e2e2ee;
+  /* O §3.1 sugere "próximo de #8E90AD": esse valor dá 3,11:1 sobre branco, mas
+     apenas 2,87:1 sobre --vg-background, onde campos também aparecem. Escurecido
+     um passo para atingir 3:1 nas duas superfícies. */
+  --vg-border-field: #8587a6;
+
+  /* --- Semântica de estado (§14) --------------------------------------- */
+  --vg-success-bg: #e4f4ee;  --vg-success-fg: #1f7a5c;
+  --vg-warning-bg: #fdf3e2;  --vg-warning-fg: #9a6410;
+  --vg-danger-bg: #fbeaec;   --vg-danger-fg: #b03a45;
+  --vg-info-bg: #f0f0f8;     --vg-info-fg: #434b8f;
+  --vg-neutral-bg: #eeeef4;  --vg-neutral-fg: #5a5e7a;
+  --vg-partial-bg: #f7f0f6;  --vg-partial-fg: #7a5a78;
+  --vg-suspended-bg: #fbf0ed; --vg-suspended-fg: #9e5445;
+
+  /* --- Rampa operacional -----------------------------------------------
+     Extensão documentada do padrão, restrita a marcador de mapa e monitor.
+     Os pares semânticos acima são para badge sobre superfície clara; um
+     marcador de 12 px precisa de preenchimento saturado, legível sob sol.
+     Info (#434B8F) está a 1,20:1 do Brand 500 e seria indistinguível da
+     navegação num marcador — daí "reservado" ser ciano. Ver ADR 0018.     */
+  --vg-status-recente: #0e8a47;
+  --vg-status-atencao: #c89000;
+  --vg-status-acao: #e2660a;
+  --vg-status-critico: #c42b2b;
+  --vg-status-nunca: #8a8a9e;
+  --vg-status-reservado: #0e7fa8;
+  --vg-status-pendencia: #7b2cbf;
+  --vg-status-bloqueado: #1a1a24;
+
+  /* --- Gradiente institucional (§3.2) ----------------------------------
+     Assinatura discreta: faixa de 2 a 4 px. Nunca fundo de área grande.  */
+  --vg-gradient: linear-gradient(
+    90deg,
+    var(--vg-brand-400) 0%,
+    var(--vg-rose-400) 52%,
+    var(--vg-peach-400) 100%
+  );
+
+  /* --- Raio (§5) -------------------------------------------------------- */
+  --vg-radius-sm: 6px;
+  --vg-radius-md: 10px;
+  --vg-radius-lg: 14px;
+  --vg-radius-pill: 999px;
+
+  /* --- Tipografia (§4) -------------------------------------------------- */
+  --vg-font-display: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --vg-font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  --vg-text-display-xl: 2rem;      --vg-leading-display-xl: 2.5rem;
+  --vg-text-h1: 1.5rem;            --vg-leading-h1: 2rem;
+  --vg-text-h2: 1.25rem;           --vg-leading-h2: 1.75rem;
+  --vg-text-h3: 1rem;              --vg-leading-h3: 1.5rem;
+  --vg-text-body: 0.875rem;        --vg-leading-body: 1.375rem;
+  --vg-text-body-sm: 0.8125rem;    --vg-leading-body-sm: 1.25rem;
+  --vg-text-caption: 0.75rem;      --vg-leading-caption: 1.125rem;
+
+  /* --- Layout (§6) ------------------------------------------------------ */
+  --vg-sidebar-width: 248px;
+  --vg-sidebar-width-collapsed: 72px;
+  --vg-topbar-height: 64px;
+
+  /* --- Elevação (§10): sombra quase imperceptível ----------------------- */
+  --vg-shadow-card: 0 1px 2px rgb(28 31 59 / 0.04);
+  --vg-shadow-overlay: 0 8px 24px rgb(28 31 59 / 0.12);
+}
