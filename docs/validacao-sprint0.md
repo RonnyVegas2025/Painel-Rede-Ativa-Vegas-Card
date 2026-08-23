@@ -264,6 +264,9 @@ Não é problema deste repositório, e não foi alterado aqui. É item para a
 governança do padrão: a decisão vale para a plataforma, e um projeto não deve
 corrigir token de outro por conta própria (`PLATFORM-STANDARDS.md` §10).
 
+Reportado em `RonnyVegas2025/Painel-Gest-o-de-Agregados` **issue #4**, com os
+valores medidos e a sugestão de separar a borda de campo da borda decorativa.
+
 ## Como reproduzir
 
 ```bash
