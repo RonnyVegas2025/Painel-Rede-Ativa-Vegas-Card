@@ -137,8 +137,25 @@ administrativo. Use o Studio.
 Promova a gestor master no **SQL Editor**:
 
 ```sql
+begin;
+select set_config('request.jwt.claims', '{"user_role":"gestor_master"}', true);
 update public.profiles set role = 'gestor_master' where email = 'gestor@vegas.local';
+commit;
 ```
+
+> **Por que a linha do `set_config`.** A trigger `fn_protect_profile_fields` só
+> libera troca de papel para quem `auth_role()` reconhece como `gestor_master`, e
+> `auth_role()` lê o JWT. Numa conexão direta — SQL Editor, `psql`, migration —
+> não há JWT, então ela devolve `consulta` (o padrão seguro do ADR 0005) e o
+> `update` falha com *"Alteracao de papel exige gestor_master"*. Trigger não é
+> RLS: superusuário não passa por cima.
+>
+> Sem essa linha não existe caminho para criar o primeiro administrador — trocar
+> papel exige ser gestor master, e ninguém é. O `set_config` com o terceiro
+> argumento `true` vale só até o fim da transação.
+>
+> Isto é contorno, não solução: está aberto em `docs/validacao-sprint0.md` (B-4),
+> à espera de decisão sobre como a trigger deve tratar conexão direta.
 
 Crie mais dois para testar permissões:
 
@@ -297,6 +314,14 @@ curl -s -X PATCH \
 ```
 
 Esperado: `[]` — resposta vazia. A policy não deixou nenhuma linha ser alcançada.
+
+> Se vier `42501 permission denied for table system_settings`, **não comemore**:
+> isso não é a RLS trabalhando, é falta de `grant` na tabela, e nesse estado
+> *nenhum* papel escreve nem lê — inclusive o gestor master. Recusa por
+> indisponibilidade se parece com recusa por política. Confira com a contraprova:
+> o consultor precisa **conseguir ler** o parâmetro, e o gestor master precisa
+> **conseguir alterá-lo**. Ver `supabase/migrations/20260823000011_table_grants.sql`.
+
 Confirme que nada mudou:
 
 ```sql
@@ -396,7 +421,7 @@ npm run db:test     # pgTAP
 
 Esperado:
 
-- Vitest: **257 testes, 10 arquivos, todos passando** (inclui contraste de token e
+- Vitest: **268 testes, 10 arquivos, todos passando** (inclui contraste de token e
   ausência de hexadecimal em componente)
 - typecheck: sem saída
 - lint: sem erro
@@ -460,7 +485,7 @@ Depois de `db reset` os usuários somem: refaça o passo 5.
 - [ ] V9 — auditoria grava alteração de parâmetro
 - [ ] V10 — login, redirecionamentos e mensagem de erro
 - [ ] V11 — diagnóstico com seis linhas verdes
-- [ ] V12 — 257 Vitest · typecheck · lint · 4 pgTAP
+- [ ] V12 — 268 Vitest · typecheck · lint · 4 pgTAP
 
 Falhando qualquer uma, me mande o comando, a saída e o passo. Corrigimos antes da
 Sprint 1.

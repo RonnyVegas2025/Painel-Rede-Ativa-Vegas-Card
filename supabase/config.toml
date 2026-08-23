@@ -25,7 +25,15 @@ refresh_token_reuse_interval = 10
 enable_signup = false          # criacao de usuario e ato administrativo, nao autosservico
 
 [auth.email]
-enable_signup = false
+# ATENCAO: a CLI deriva GOTRUE_EXTERNAL_EMAIL_ENABLED desta chave, e nao de um
+# campo proprio. Com `false` aqui o provedor de e-mail sai do ar inteiro e o
+# /login responde "Email logins are disabled" — com o banco perfeito, o que
+# torna o sintoma dificil de ligar a causa.
+#
+# Quem desliga o autosservico e o `enable_signup` da secao [auth] acima, que
+# vira GOTRUE_DISABLE_SIGNUP=true. Esta chave mantem apenas o provedor ligado,
+# para que o usuario criado pelo gestor consiga entrar.
+enable_signup = true
 enable_confirmations = true
 
 # Injeta user_role no JWT. Sem isso, toda policy cai para 'consulta' e o sistema

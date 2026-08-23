@@ -10,7 +10,7 @@ Este documento registra o que foi ajustado e as decisões tomadas no caminho.
 | Contraste de todos os pares de token | 17 pares, todos aprovados |
 | Hexadecimal fora de `styles/tokens.css` | nenhum |
 | Nomenclatura `ink-muted` | eliminada |
-| Testes automatizados | 257, todos passando |
+| Testes automatizados | 268, todos passando |
 | Typecheck estrito | limpo |
 
 ## Defeitos corrigidos
