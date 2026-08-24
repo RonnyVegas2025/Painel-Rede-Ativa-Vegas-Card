@@ -312,8 +312,8 @@ valores medidos e a sugestão de separar a borda de campo da borda decorativa.
 supabase start -x vector,logflare,supavisor,imgproxy,mailpit,studio,edge-runtime,storage-api
 npm run db:types
 npm run check       # typecheck · lint · 254 testes, sem banco
-npm run db:test     # 4 arquivos pgTAP, 36 testes
-npm run test:parity # 22 casos de paridade SQL x TypeScript
+npm run db:test     # 4 arquivos pgTAP, 37 testes
+npm run test:parity # 32 casos de paridade SQL x TypeScript
 npm run build && npm run start
 ```
 

@@ -12,7 +12,7 @@
 -- ser construida em cima.
 
 begin;
-select plan(5);
+select plan(6);
 
 -- 1. TRUNCATE ignora RLS -------------------------------------------------------
 -- Um usuario logado com TRUNCATE esvazia audit_logs sem passar por policy
@@ -81,27 +81,67 @@ select is(
   'toda policy de authenticated tem o grant correspondente: nenhuma e codigo morto'
 );
 
--- 5. O privilegio padrao do schema continua declarado --------------------------
--- Se alguem reverter a 0014, os testes 1 a 4 continuam verdes para as tabelas de
--- hoje e a proxima tabela nasce errada de novo. Esta assercao olha o padrao em
--- si, e nao o efeito dele.
+-- 5 e 6. O privilegio padrao do schema continua declarado ----------------------
+-- Se alguem reverter a 0014 ou a 0015, os testes 1 a 4 continuam verdes para as
+-- tabelas de hoje e a proxima tabela nasce errada. Estas duas assercoes olham o
+-- padrao em si, e nao o efeito dele.
 --
--- Escopo: o papel `postgres`, que e quem cria as tabelas deste schema — as
--- migrations rodam como ele e ele e o dono das 7. Existe tambem uma entrada de
--- `supabase_admin` concedendo tudo a anon, inclusive TRUNCATE; ela e da
--- plataforma, vale so para tabela criada por aquele papel e nao esta sob controle
--- deste repositorio. Nao ficamos descobertos por causa dela: os testes 1 a 3
--- olham o privilegio efetivo de cada tabela existente, seja qual for o criador.
+-- O papel NAO e citado pelo nome. `alter default privileges` vale por papel
+-- criador, e fixar 'postgres' aqui repetiria, no teste, o mesmo defeito que a
+-- 0015 corrige na migration: se outro ambiente aplicar as migrations com outro
+-- papel, um teste preso a 'postgres' passaria sem ter verificado aquele ambiente.
+-- O papel e derivado de quem, de fato, e dono das tabelas deste schema.
+--
+-- `supabase_admin` fica de fora: e da plataforma, concede tudo a anon por padrao,
+-- vale so para tabela criada por ele e nao esta sob controle deste repositorio.
+-- Nao ficamos descobertos por causa disso — os testes 1 a 3 olham o privilegio
+-- efetivo de cada tabela existente, seja qual for o criador.
+
 select is(
   (select count(*)::int
-   from pg_default_acl d
-   join pg_namespace n on n.oid = d.defaclnamespace
-   where n.nspname = 'public'
-     and d.defaclobjtype = 'r'
-     and pg_get_userbyid(d.defaclrole) = 'postgres'
-     and array_to_string(d.defaclacl, ' ') like '%anon=%'),
+   from (
+     select distinct c.relowner as dono
+     from pg_class c
+     join pg_namespace n on n.oid = c.relnamespace
+     where n.nspname = 'public' and c.relkind = 'r'
+       and pg_get_userbyid(c.relowner) <> 'supabase_admin'
+   ) donos
+   where (
+     select count(distinct a.privilege_type)
+     from pg_default_acl d
+     join pg_namespace ns on ns.oid = d.defaclnamespace
+     cross join lateral aclexplode(d.defaclacl) a
+     where ns.nspname = 'public'
+       and d.defaclobjtype = 'r'
+       and d.defaclrole = donos.dono
+       and a.grantee = 'authenticated'::regrole::oid
+       and a.privilege_type in ('SELECT', 'INSERT', 'UPDATE', 'DELETE')
+   ) <> 4),
   0,
-  'o privilegio padrao de public, para o papel criador das tabelas, nao concede nada a anon'
+  'todo papel dono de tabela em public concede os quatro DML a authenticated por padrao'
+);
+
+select is(
+  (select count(*)::int
+   from (
+     select distinct c.relowner as dono
+     from pg_class c
+     join pg_namespace n on n.oid = c.relnamespace
+     where n.nspname = 'public' and c.relkind = 'r'
+       and pg_get_userbyid(c.relowner) <> 'supabase_admin'
+   ) donos
+   where exists (
+     select 1
+     from pg_default_acl d
+     join pg_namespace ns on ns.oid = d.defaclnamespace
+     cross join lateral aclexplode(d.defaclacl) a
+     where ns.nspname = 'public'
+       and d.defaclobjtype = 'r'
+       and d.defaclrole = donos.dono
+       and a.grantee = 'anon'::regrole::oid
+   )),
+  0,
+  'nenhum papel dono de tabela em public concede privilegio padrao a anon'
 );
 
 select * from finish();

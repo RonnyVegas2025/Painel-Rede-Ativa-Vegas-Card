@@ -95,6 +95,22 @@ corrige sem migração de dados.**
 Com o arnês genérico, `normalize_address` entra na Sprint 1 com um arquivo de
 entradas e uma definição. Nada em `harness.ts` muda.
 
+## Cobertura atual
+
+| Função SQL | Gêmea TypeScript | Entradas |
+|---|---|---|
+| `calculate_transaction_status` | `calculateTransactionStatus` | `tests/fixtures/transaction-status.ts` |
+| `is_segment_eligible` | `isSegmentEligible` | `tests/fixtures/segment-eligibility.ts` |
+
+`is_segment_eligible` é o caso que justifica o arnês retroativamente: a gêmea
+TypeScript sempre devolveu booleano, a SQL devolvia **NULL** para segmento sem
+regra em modo `allowlist` (B-7). Verificado restaurando a função defeituosa — o
+arnês acusa `{ sql: null, ts: 'false' }` na primeira entrada da lista. O defeito
+tinha atravessado a revisão e só aparecera no pgTAP.
+
+`normalize_address` entra no **primeiro commit da Sprint 1**, antes de qualquer
+importação gravar hash. Ver a seção seguinte.
+
 ## Consequências
 
 - Entrada nova se acrescenta em um lugar só, e passa a valer para as duas

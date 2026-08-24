@@ -420,8 +420,8 @@ Esperado:
   ausência de hexadecimal em componente)
 - typecheck: sem saída
 - lint: sem erro
-- pgTAP: 4 arquivos — `01`, `02`, `03` e `05` — **36 testes**, todos `ok`
-- paridade: 1 arquivo, **22 testes**
+- pgTAP: 4 arquivos — `01`, `02`, `03` e `05` — **37 testes**, todos `ok`
+- paridade: 2 arquivos, **32 testes**
 
 `npm run check` roda os três primeiros de uma vez. **`test:parity` fica de fora
 dele de propósito**: exige o banco local e falha, em vez de pular, se ele não
@@ -483,7 +483,7 @@ Depois de `db reset` os usuários somem: refaça o passo 5.
 - [ ] V9 — auditoria grava alteração de parâmetro
 - [ ] V10 — login, redirecionamentos e mensagem de erro
 - [ ] V11 — diagnóstico com seis linhas verdes
-- [ ] V12 — 254 Vitest · typecheck · lint · 36 pgTAP · 22 de paridade
+- [ ] V12 — 254 Vitest · typecheck · lint · 37 pgTAP · 32 de paridade
 
 Falhando qualquer uma, me mande o comando, a saída e o passo. Corrigimos antes da
 Sprint 1.

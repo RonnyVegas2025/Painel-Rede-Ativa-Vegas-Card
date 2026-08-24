@@ -1,6 +1,10 @@
 {
   "name": "painel-rede-vegas-ativa",
   "version": "0.1.0",
+  "engines": {
+    "node": "22.x",
+    "npm": ">=10"
+  },
   "private": true,
   "scripts": {
     "dev": "next dev",
