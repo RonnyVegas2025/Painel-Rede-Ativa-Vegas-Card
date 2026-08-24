@@ -101,6 +101,7 @@ entradas e uma definição. Nada em `harness.ts` muda.
 |---|---|---|
 | `calculate_transaction_status` | `calculateTransactionStatus` | `tests/fixtures/transaction-status.ts` |
 | `is_segment_eligible` | `isSegmentEligible` | `tests/fixtures/segment-eligibility.ts` |
+| `normalize_address` | `normalizeAddress` | `tests/fixtures/normalize-address.ts` |
 
 `is_segment_eligible` é o caso que justifica o arnês retroativamente: a gêmea
 TypeScript sempre devolveu booleano, a SQL devolvia **NULL** para segmento sem
@@ -108,8 +109,22 @@ regra em modo `allowlist` (B-7). Verificado restaurando a função defeituosa �
 arnês acusa `{ sql: null, ts: 'false' }` na primeira entrada da lista. O defeito
 tinha atravessado a revisão e só aparecera no pgTAP.
 
-`normalize_address` entra no **primeiro commit da Sprint 1**, antes de qualquer
-importação gravar hash. Ver a seção seguinte.
+`normalize_address` entrou no **primeiro commit da Sprint 1** (E-001), antes de
+qualquer tabela de estabelecimento existir — 71 entradas, todas convergindo.
+
+Duas decisões da gêmea SQL, registradas na migration 0016 porque não são detalhe
+de implementação:
+
+- **Sem `unaccent`.** A extensão depende de um arquivo de transliteração
+  instalado no servidor, que varia entre instalações e versões de imagem — a
+  mesma classe de dependência implícita que produziu a ausência de GRANT na
+  Sprint 0. Hash persistido não pode depender de configuração do servidor. O mapa
+  de caracteres é explícito, via `translate()`, versionado na migration.
+- **`\y`, nunca `\b`.** Em POSIX, `\b` é backspace, não fronteira de palavra. A
+  tradução literal compilaria, rodaria e daria resultado errado sem erro nenhum.
+  Verificado injetando o defeito: **20 das 71 entradas divergem**, com as
+  abreviações silenciosamente deixando de expandir — `{ sql: 'pc da se 100', ts:
+  'praca da se 100' }`. Sem o arnês, isso chegaria à base com hash gravado.
 
 ## Consequências
 
