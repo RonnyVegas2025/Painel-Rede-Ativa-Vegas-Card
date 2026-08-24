@@ -139,3 +139,109 @@ Sem `update`, sem `delete`, para nenhum papel. Inserção apenas pela função d
 
 `actor_role` é gravado por cópia, não por junção: o papel do usuário muda com o tempo, e o
 log precisa registrar sob qual autoridade o ato foi praticado.
+
+
+---
+
+# Sprint 1 — estabelecimentos e importação
+
+## capture_methods
+
+| Coluna | Tipo | Notas |
+|---|---|---|
+| `id` | uuid PK | |
+| `source_name` | text | not null, unique — valor cru da coluna `Captação` |
+| `name` | text | not null — rótulo humano |
+| `is_active` | boolean | default true |
+
+**Nasce vazia.** Semear com nomes escolhidos à mão criaria o mesmo defeito de
+reconciliação que `source_name` existe para evitar em `segments`: se a planilha
+grafar `STONE PAGAMENTOS`, o seed cria um registro e o importador cria outro. Quem
+popula é o importador, pelos valores distintos de `Captação`.
+
+Entrou na Sprint 1, e não na 6 como previa o roadmap, porque
+`establishment_capture_points` a referencia e o dado chega na importação. FK
+nascendo nula obrigaria a Sprint 6 a re-derivar o vínculo a partir de
+`import_rows`, com a base já em uso.
+
+## establishments
+
+| Coluna | Tipo | Notas |
+|---|---|---|
+| `id` | uuid PK | |
+| `external_contract` | text | identidade prioritária; **unique parcial** quando não nulo |
+| `cnpj` | text | 14 dígitos por check; indexado; **nunca chave única** (ADR 0001) |
+| `legal_name` · `trade_name` | text | not null |
+| `segment_id` | uuid | FK `segments` |
+| `registration_status` | enum | `ativo` `bloqueado` `cancelado` `em_analise` |
+| `operational_status` | enum | dez estados |
+| `relationship_start_date` | date | coluna `Data de Cadastro`. **Não é `created_at`** |
+| `last_transaction_at` | timestamptz | |
+| `never_transacted` | boolean | ver constraint abaixo |
+| `is_active` | boolean | default true |
+
+**`check (not never_transacted or last_transaction_at is null)`** — a redundância
+entre a flag e o nulo é proposital: nulo pode significar "nunca transacionou" ou
+"não informado", e a planilha distingue com o texto `Nunca Transacionou`.
+Redundância sem constraint diverge.
+
+## establishment_addresses
+
+| Coluna | Tipo | Notas |
+|---|---|---|
+| `id` | uuid PK | |
+| `establishment_id` | uuid | FK, on delete cascade |
+| `street` · `city` · `state` | text | not null — bruto, preservado intocado |
+| `cep` | text | 8 dígitos por check |
+| `normalized_address` | text | **gerada pelo banco** por `normalize_address` |
+| `address_hash` | text | **gerada** — md5 do normalizado |
+| `latitude` · `longitude` | double precision | populadas na Sprint 2 |
+| `is_current` | boolean | **unique parcial por estabelecimento** |
+
+As duas colunas geradas não aceitam escrita. O ADR 0001 exige persistir a
+normalização; persistir e deixar a aplicação gravar são coisas diferentes — um
+defeito no importador escreveria hash divergente, e hash divergente só se corrige
+com migração de dados. A gêmea TypeScript continua existindo para o importador
+casar linha **antes** de gravar; o valor gravado não depende dela.
+
+**`unique (establishment_id) where is_current`** — sem isto, "mudou de endereço"
+deixa dois correntes e o check-in por raio da Sprint 3 usa coordenada arbitrária.
+
+## establishment_capture_points
+
+| Coluna | Tipo | Notas |
+|---|---|---|
+| `id` | uuid PK | |
+| `establishment_id` | uuid | FK, on delete cascade |
+| `capture_method_id` | uuid | FK `capture_methods`; nula até o importador reconciliar |
+| `terminal_number` | text | not null |
+| `status` | `capture_point_status` | `ativo` `inativo` `substituido` |
+| `is_primary` | boolean | **unique parcial por estabelecimento** |
+
+**`unique (establishment_id) where is_primary`** e
+**`unique (establishment_id, terminal_number) where status = 'ativo'`**.
+
+O segundo é **provisório** e vive em migration própria (0020): a chave definitiva
+depende de medição no arquivo real. Se o mesmo terminal aparecer em
+estabelecimentos diferentes, passa a ser `(capture_method_id, terminal_number)`.
+
+É parcial porque `substituido` existe: equipamento trocado deixa o ponto antigo
+como histórico, e ponto histórico não pode bloquear o novo.
+
+## import_jobs
+
+Escopo, contadores e a trava de ausentes. Detalhe e rationale no **ADR 0011**.
+
+## import_rows
+
+| Coluna | Tipo | Notas |
+|---|---|---|
+| `import_id` | uuid | FK, on delete cascade |
+| `line_number` | integer | unique com `import_id` |
+| `status` | `import_row_status` | seis estados, espelha `ImportRowStatus` |
+| `raw_data` | jsonb | linha crua — dado de terceiro |
+| `establishment_id` | uuid | FK, nula quando a linha não casou |
+
+Leitura restrita a quem executa importação: `raw_data` guarda telefone, e-mail e
+razão social de terceiros. **Sem policy de escrita** — a linha crua é evidência do
+que o arquivo trazia, não dado editável.
