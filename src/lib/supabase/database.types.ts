@@ -60,6 +60,33 @@ export type Database = {
         }
         Relationships: []
       }
+      capture_methods: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          source_name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          source_name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          source_name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       card_products: {
         Row: {
           created_at: string
@@ -95,6 +122,320 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      establishment_addresses: {
+        Row: {
+          address_hash: string | null
+          cep: string | null
+          city: string
+          created_at: string
+          establishment_id: string
+          id: string
+          is_current: boolean
+          latitude: number | null
+          longitude: number | null
+          normalized_address: string | null
+          state: string
+          street: string
+          updated_at: string
+        }
+        Insert: {
+          address_hash?: string | null
+          cep?: string | null
+          city: string
+          created_at?: string
+          establishment_id: string
+          id?: string
+          is_current?: boolean
+          latitude?: number | null
+          longitude?: number | null
+          normalized_address?: string | null
+          state: string
+          street: string
+          updated_at?: string
+        }
+        Update: {
+          address_hash?: string | null
+          cep?: string | null
+          city?: string
+          created_at?: string
+          establishment_id?: string
+          id?: string
+          is_current?: boolean
+          latitude?: number | null
+          longitude?: number | null
+          normalized_address?: string | null
+          state?: string
+          street?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "establishment_addresses_establishment_id_fkey"
+            columns: ["establishment_id"]
+            isOneToOne: false
+            referencedRelation: "establishments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      establishment_capture_points: {
+        Row: {
+          capture_method_id: string | null
+          created_at: string
+          establishment_id: string
+          id: string
+          is_primary: boolean
+          status: Database["public"]["Enums"]["capture_point_status"]
+          terminal_number: string
+          updated_at: string
+        }
+        Insert: {
+          capture_method_id?: string | null
+          created_at?: string
+          establishment_id: string
+          id?: string
+          is_primary?: boolean
+          status?: Database["public"]["Enums"]["capture_point_status"]
+          terminal_number: string
+          updated_at?: string
+        }
+        Update: {
+          capture_method_id?: string | null
+          created_at?: string
+          establishment_id?: string
+          id?: string
+          is_primary?: boolean
+          status?: Database["public"]["Enums"]["capture_point_status"]
+          terminal_number?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "establishment_capture_points_capture_method_id_fkey"
+            columns: ["capture_method_id"]
+            isOneToOne: false
+            referencedRelation: "capture_methods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "establishment_capture_points_establishment_id_fkey"
+            columns: ["establishment_id"]
+            isOneToOne: false
+            referencedRelation: "establishments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      establishments: {
+        Row: {
+          cnpj: string | null
+          created_at: string
+          description: string | null
+          email: string | null
+          external_contract: string | null
+          id: string
+          is_active: boolean
+          last_transaction_at: string | null
+          legal_name: string
+          never_transacted: boolean
+          operational_status: Database["public"]["Enums"]["operational_status"]
+          origin: string | null
+          phone: string | null
+          registration_status: Database["public"]["Enums"]["registration_status"]
+          relationship_start_date: string | null
+          segment_id: string | null
+          trade_name: string
+          updated_at: string
+        }
+        Insert: {
+          cnpj?: string | null
+          created_at?: string
+          description?: string | null
+          email?: string | null
+          external_contract?: string | null
+          id?: string
+          is_active?: boolean
+          last_transaction_at?: string | null
+          legal_name: string
+          never_transacted?: boolean
+          operational_status?: Database["public"]["Enums"]["operational_status"]
+          origin?: string | null
+          phone?: string | null
+          registration_status?: Database["public"]["Enums"]["registration_status"]
+          relationship_start_date?: string | null
+          segment_id?: string | null
+          trade_name: string
+          updated_at?: string
+        }
+        Update: {
+          cnpj?: string | null
+          created_at?: string
+          description?: string | null
+          email?: string | null
+          external_contract?: string | null
+          id?: string
+          is_active?: boolean
+          last_transaction_at?: string | null
+          legal_name?: string
+          never_transacted?: boolean
+          operational_status?: Database["public"]["Enums"]["operational_status"]
+          origin?: string | null
+          phone?: string | null
+          registration_status?: Database["public"]["Enums"]["registration_status"]
+          relationship_start_date?: string | null
+          segment_id?: string | null
+          trade_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "establishments_segment_id_fkey"
+            columns: ["segment_id"]
+            isOneToOne: false
+            referencedRelation: "segments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      import_jobs: {
+        Row: {
+          confirmed_at: string | null
+          confirmed_by: string | null
+          conflict_count: number
+          created_at: string
+          created_count: number
+          error_count: number
+          file_name: string
+          finished_at: string | null
+          id: string
+          missing_count: number
+          requires_confirmation: boolean
+          scope_card_product_id: string | null
+          scope_city: string | null
+          started_at: string
+          storage_path: string
+          total_rows: number
+          unchanged_count: number
+          updated_at: string
+          updated_count: number
+          uploaded_by: string | null
+        }
+        Insert: {
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          conflict_count?: number
+          created_at?: string
+          created_count?: number
+          error_count?: number
+          file_name: string
+          finished_at?: string | null
+          id?: string
+          missing_count?: number
+          requires_confirmation?: boolean
+          scope_card_product_id?: string | null
+          scope_city?: string | null
+          started_at?: string
+          storage_path: string
+          total_rows?: number
+          unchanged_count?: number
+          updated_at?: string
+          updated_count?: number
+          uploaded_by?: string | null
+        }
+        Update: {
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          conflict_count?: number
+          created_at?: string
+          created_count?: number
+          error_count?: number
+          file_name?: string
+          finished_at?: string | null
+          id?: string
+          missing_count?: number
+          requires_confirmation?: boolean
+          scope_card_product_id?: string | null
+          scope_city?: string | null
+          started_at?: string
+          storage_path?: string
+          total_rows?: number
+          unchanged_count?: number
+          updated_at?: string
+          updated_count?: number
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_jobs_confirmed_by_fkey"
+            columns: ["confirmed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "import_jobs_scope_card_product_id_fkey"
+            columns: ["scope_card_product_id"]
+            isOneToOne: false
+            referencedRelation: "card_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "import_jobs_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      import_rows: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          establishment_id: string | null
+          id: string
+          import_id: string
+          line_number: number
+          raw_data: Json
+          status: Database["public"]["Enums"]["import_row_status"]
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          establishment_id?: string | null
+          id?: string
+          import_id: string
+          line_number: number
+          raw_data: Json
+          status: Database["public"]["Enums"]["import_row_status"]
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          establishment_id?: string | null
+          id?: string
+          import_id?: string
+          line_number?: number
+          raw_data?: Json
+          status?: Database["public"]["Enums"]["import_row_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_rows_establishment_id_fkey"
+            columns: ["establishment_id"]
+            isOneToOne: false
+            referencedRelation: "establishments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "import_rows_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "import_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       product_segments: {
         Row: {
@@ -342,12 +683,30 @@ export type Database = {
         }
         Returns: boolean
       }
+      normalize_address: {
+        Args: { p_cep?: string; p_raw: string }
+        Returns: string
+      }
       request_ip: { Args: never; Returns: unknown }
     }
     Enums: {
       audit_action: "insert" | "update" | "delete" | "login" | "custom"
       audit_origin: "web" | "import" | "system" | "edge_function"
+      capture_point_status:
+        | "ativo"
+        | "inativo"
+        | "em_homologacao"
+        | "com_erro"
+        | "substituido"
+        | "cancelado"
       eligibility_mode: "all" | "allowlist" | "denylist"
+      import_row_status:
+        | "novo"
+        | "atualizado"
+        | "inalterado"
+        | "conflito"
+        | "erro"
+        | "ausente"
       occurrence_status:
         | "aberta"
         | "em_analise"
@@ -1065,7 +1424,23 @@ export const Constants = {
     Enums: {
       audit_action: ["insert", "update", "delete", "login", "custom"],
       audit_origin: ["web", "import", "system", "edge_function"],
+      capture_point_status: [
+        "ativo",
+        "inativo",
+        "em_homologacao",
+        "com_erro",
+        "substituido",
+        "cancelado",
+      ],
       eligibility_mode: ["all", "allowlist", "denylist"],
+      import_row_status: [
+        "novo",
+        "atualizado",
+        "inalterado",
+        "conflito",
+        "erro",
+        "ausente",
+      ],
       occurrence_status: [
         "aberta",
         "em_analise",

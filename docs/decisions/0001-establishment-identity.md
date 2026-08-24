@@ -38,5 +38,32 @@ Colisão de contrato dentro do mesmo arquivo não decide sozinha: a linha vai pa
   anterior.
 - O hash do endereço precisa ser estável: mudar a função de normalização depois exige
   migração de dados. A função fica em `lib/business-rules` com teste de regressão.
+
+- **A normalização virou dependência de coluna gerada (Sprint 1).**
+  `establishment_addresses.normalized_address` e `.address_hash` são
+  `generated always as (public.normalize_address(street, cep)) stored`. A aplicação
+  não grava: um defeito no importador escreveria hash divergente, e hash divergente
+  não se corrige sem migração de dados. Como coluna gerada, quem calcula é a mesma
+  função que o arnês do ADR 0010 compara com a gêmea TypeScript a cada CI. A gêmea
+  continua servindo ao importador para casar linha **antes** de gravar; o valor
+  gravado não depende dela.
+
+  **Alterar `public.normalize_address` exige `update` de recálculo na mesma
+  migration.** `create or replace function` **não** recalcula colunas geradas já
+  materializadas — verificado com o banco no ar: o valor armazenado permanece na
+  regra antiga enquanto a função já devolve a nova. A tabela passaria a conter as
+  duas regras, indistinguíveis, sem erro nem aviso.
+
+  Três coisas que **não** cobrem isso, e é por isso que a advertência está aqui:
+
+  - O arnês de paridade compara as duas implementações **atuais** entre si, nunca o
+    que está gravado contra a função corrente. São verificações de coisas diferentes.
+  - "Função congelada" é política escrita, e política escrita não impede
+    `create or replace`.
+  - O Postgres permite a substituição sem reclamar — não há proteção do banco.
+
+  Quem cobre é `supabase/tests/06_establishments.sql`, que compara valor gravado com
+  recálculo e falha no CI. O próprio teste prova que tem dentes: adultera a função,
+  confirma que a verificação acusa, e restaura.
 - Buscar "todas as lojas deste CNPJ" é uma consulta legítima e frequente — o índice em
   `cnpj` não é opcional.

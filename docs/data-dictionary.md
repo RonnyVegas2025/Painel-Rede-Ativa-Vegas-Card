@@ -215,11 +215,33 @@ deixa dois correntes e o check-in por raio da Sprint 3 usa coordenada arbitrári
 | `establishment_id` | uuid | FK, on delete cascade |
 | `capture_method_id` | uuid | FK `capture_methods`; nula até o importador reconciliar |
 | `terminal_number` | text | not null |
-| `status` | `capture_point_status` | `ativo` `inativo` `substituido` |
+| `status` | `capture_point_status` | seis valores — ver abaixo |
 | `is_primary` | boolean | **unique parcial por estabelecimento** |
 
+`capture_point_status` tem **seis** valores, conforme o complemento de escopo §11:
+`ativo` `inativo` `em_homologacao` `com_erro` `substituido` `cancelado`. A migration
+0017 criou apenas três e a 0021 completou — `com_erro` em particular é o estado que
+a Sprint 7 usa para abrir atendimento a partir de ponto com problema, e adicionar
+valor a enum depois da primeira importação deixa de ser barato.
+
+A distinção que governa o índice não é "qual estado está em uso", e sim **qual
+conjunto ocupa o número do terminal**:
+
+| ocupam o número | liberam o número |
+|---|---|
+| `ativo` · `em_homologacao` · `com_erro` | `inativo` · `substituido` · `cancelado` |
+
+Ponto `com_erro` continua alocado: o problema é do equipamento, não da alocação, e
+liberar ali permitiria cadastrar um ponto novo com o mesmo terminal enquanto o
+atendimento do antigo corre.
+
 **`unique (establishment_id) where is_primary`** e
-**`unique (establishment_id, terminal_number) where status = 'ativo'`**.
+**`unique (establishment_id, terminal_number) where status in ('ativo','em_homologacao','com_erro')`**.
+
+Não há `is_active` nesta tabela, de propósito: `status` já é a verdade, e um
+booleano ao lado seria a mesma informação por dois caminhos, livre para divergir —
+o mesmo problema de `never_transacted`, mas sem distinção semântica que o
+justifique. As demais tabelas mantêm `is_active`, onde ele é a única dimensão.
 
 O segundo é **provisório** e vive em migration própria (0020): a chave definitiva
 depende de medição no arquivo real. Se o mesmo terminal aparecer em

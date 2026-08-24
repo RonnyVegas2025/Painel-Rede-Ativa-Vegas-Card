@@ -7,7 +7,7 @@
 -- parciais desta sprint.
 
 begin;
-select plan(15);
+select plan(22);
 
 -- Fixtures locais. O rollback no fim descarta tudo.
 insert into public.establishments (id, external_contract, cnpj, legal_name, trade_name)
@@ -169,6 +169,108 @@ select is(
                        'import_jobs','import_rows')),
   0,
   'nenhuma tabela da Sprint 1 tem policy de delete: desativa-se com is_active'
+);
+
+-- ===========================================================================
+-- Recalculo: nenhum valor gravado diverge da funcao atual
+-- ===========================================================================
+-- O vetor que a coluna gerada abriu, e que nenhuma outra verificacao pega.
+--
+-- `create or replace function normalize_address(...)` NAO recalcula o que ja
+-- esta gravado. Verificado: alterando a funcao com linhas na tabela, o valor
+-- armazenado permanece o da regra antiga enquanto a funcao ja devolve a nova. A
+-- tabela passa a conter as duas regras, indistinguiveis, sem erro nem aviso.
+--
+-- O arnes de paridade NAO cobre isto: ele compara as duas implementacoes ATUAIS
+-- entre si, nunca o que esta gravado contra a funcao corrente. Sao verificacoes
+-- de coisas diferentes.
+--
+-- Politica escrita tambem nao cobre: o ADR 0001 declara a funcao congelada, e
+-- congelada em documento nao impede `create or replace`. Isto impede.
+--
+-- Quem alterar a funcao tem de recalcular na mesma migration, com um `update`
+-- que force a regravacao das colunas geradas. Se nao fizer, isto falha no CI.
+
+-- A invariante propriamente dita. Em CI a tabela esta vazia, entao aqui ela vale
+-- sobre as fixtures acima; depois da primeira importacao real vale sobre a base.
+select is_empty(
+  $$ select id from public.establishment_addresses
+     where normalized_address is distinct from public.normalize_address(street, cep)
+        or address_hash is distinct from md5(public.normalize_address(street, cep)) $$,
+  'nenhum valor gravado diverge do recalculo pela funcao atual'
+);
+
+-- A verificacao acima, sozinha, NAO TEM DENTES sobre as proprias fixtures: elas
+-- foram inseridas nesta transacao, com a funcao corrente, entao gravado e
+-- recalculo coincidem por construcao. Provar que ela acusa exige criar a deriva.
+--
+-- Guarda a definicao, adultera a funcao, confirma que a verificacao encontra a
+-- linha, e restaura. Tudo dentro da transacao que o rollback descarta.
+create temp table _fn_original as
+  select pg_get_functiondef(p.oid) as def
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public' and p.proname = 'normalize_address';
+
+create or replace function public.normalize_address(p_raw text, p_cep text default null)
+returns text language plpgsql immutable set search_path = '' as $adulterada$
+begin return 'REGRA-DIVERGENTE'; end;
+$adulterada$;
+
+select isnt_empty(
+  $$ select id from public.establishment_addresses
+     where normalized_address is distinct from public.normalize_address(street, cep) $$,
+  'a verificacao ACUSA quando a funcao muda sem recalculo: o valor gravado fica na regra antiga'
+);
+
+do $restaura$
+declare v_def text;
+begin
+  select def into v_def from _fn_original;
+  execute v_def;
+end
+$restaura$;
+
+select is_empty(
+  $$ select id from public.establishment_addresses
+     where normalized_address is distinct from public.normalize_address(street, cep) $$,
+  'restaurada a funcao, a divergencia desaparece: era a funcao, nao o dado'
+);
+
+-- ===========================================================================
+-- Ocupacao do terminal: quais estados prendem o numero
+-- ===========================================================================
+-- Com os seis valores do complemento §11, a pergunta deixou de ser "qual estado
+-- esta em uso" e passou a ser qual conjunto OCUPA o numero.
+--   ocupam    ativo · em_homologacao · com_erro
+--   liberam   inativo · substituido · cancelado
+
+select lives_ok(
+  $$ insert into public.establishment_capture_points (establishment_id, terminal_number, status)
+     values ('11111111-1111-1111-1111-111111111111', 'T-300', 'com_erro') $$,
+  'ponto com_erro e aceito num terminal livre'
+);
+
+-- Ponto com erro continua alocado: o problema e do equipamento, nao da alocacao.
+-- Liberar aqui deixaria cadastrar um ponto novo com o mesmo terminal enquanto o
+-- atendimento do antigo corre, que e o caso de uso da Sprint 7.
+select throws_ok(
+  $$ insert into public.establishment_capture_points (establishment_id, terminal_number, status)
+     values ('11111111-1111-1111-1111-111111111111', 'T-300', 'ativo') $$,
+  23505,
+  null,
+  'com_erro OCUPA o terminal: um segundo ponto no mesmo numero e recusado'
+);
+
+select lives_ok(
+  $$ insert into public.establishment_capture_points (establishment_id, terminal_number, status)
+     values ('11111111-1111-1111-1111-111111111111', 'T-400', 'cancelado') $$,
+  'ponto cancelado e aceito'
+);
+
+select lives_ok(
+  $$ insert into public.establishment_capture_points (establishment_id, terminal_number, status)
+     values ('11111111-1111-1111-1111-111111111111', 'T-400', 'ativo') $$,
+  'cancelado LIBERA o terminal: o numero volta a ser reivindicavel'
 );
 
 select * from finish();
