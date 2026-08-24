@@ -229,17 +229,56 @@ existe. Na máquina de quem tinha acabado de compilar, falhava. Adicionado aos
 `ignores`. De quebra, o `export default` anônimo — único aviso restante da suíte
 — passou a ser nomeado.
 
-## O que a suíte não verifica
+## Pós-validação — o que mudou depois
 
-**O teste de paridade não testa paridade.** `PLATFORM-STANDARDS.md` §8 prevê
-"paridade entre implementação SQL e TypeScript · Vitest contra banco local".
-`tests/parity/transaction-status-parity.test.ts` roda sem banco e compara o
-TypeScript com expectativas escritas à mão; `04_transaction_status_parity.sql`
-faz o mesmo do lado SQL. As duas metades nunca se encontram — foi por isso que
-B-8 e B-7 conviveram com suíte verde.
+Quatro itens executados após o aceite do relatório.
 
-Enquanto isso não muda, divergência entre as gêmeas só aparece quando os dois
-conjuntos de expectativas discordarem por acaso.
+### O teste de paridade não testava paridade — corrigido
+
+`PLATFORM-STANDARDS.md` §8 prevê "paridade entre implementação SQL e TypeScript ·
+Vitest contra banco local". O que existia eram duas listas de casos, uma em
+Vitest e outra em pgTAP, cada uma comparando com expectativas escritas à mão, mais
+uma asserção de "mesma quantidade de casos". As duas metades nunca se
+encontravam — foi por isso que B-7 e B-8 conviveram com suíte verde.
+
+Substituído por um arnês genérico (ADR 0010): mesma entrada nas duas
+implementações, saídas comparadas entre si, sem expectativa no meio. As entradas
+vivem em `tests/fixtures/`, sem valor esperado. Os testes de valor esperado
+sobre a função TypeScript continuam em `tests/unit/` — paridade prova que as duas
+concordam, não que estão certas.
+
+Verificado que o arnês pega o que promete: trocando `<=` por `<` na faixa recente
+da função SQL, ele acusa exatamente as duas bordas afetadas, com os dois valores
+lado a lado (`{ sql: 'atencao', ts: 'recente' }`). E com o banco fora do ar ele
+**falha**, não pula.
+
+Genérico porque o ADR 0001 persiste o hash do endereço normalizado: a Sprint 1
+vai criar uma gêmea SQL de `normalizeAddress`, e divergência de um hífen ali
+duplica pontos credenciados sem conserto que não passe por migração de dados.
+
+### Privilégio durável para tabelas futuras
+
+A 0011 concedeu tabela a tabela. Confirmado com o banco no ar que uma tabela nova
+ainda nasceria com `REFERENCES, TRIGGER, TRUNCATE` para os três papéis — `anon`
+incluído — e nenhum DML: o mesmo defeito voltaria na primeira tabela da Sprint 1.
+
+A 0014 declara o privilégio padrão do schema. O `05_grants_and_rls.sql` varre o
+schema inteiro, sem citar nome de tabela, e falha se alguma ficar sem RLS, com
+TRUNCATE indevido, com privilégio para `anon` ou com policy sem o grant
+correspondente. Cada uma das quatro asserções foi verificada introduzindo o
+defeito que ela promete pegar.
+
+### TRUNCATE em `authenticated`
+
+Já estava coberto: o `revoke all` da 0011 alcançou os três papéis, não só `anon`.
+Confirmado por consulta e agora travado pelo teste acima.
+
+### Promoção de papel não passa por `service_role`
+
+Registrado no ADR 0005 (Consequências) e em `permissions.md`: a tela de gestão de
+usuários terá que promover papel com o JWT do gestor master. O token de
+`service_role` não carrega `user_role`, então `auth_role()` cai para `consulta` e
+a trigger recusa — comportamento pretendido, porque `service_role` ignora RLS.
 
 ## Contraste na plataforma — o que o Agregados mostra
 
@@ -272,8 +311,9 @@ valores medidos e a sugestão de separar a borda de campo da borda decorativa.
 ```bash
 supabase start -x vector,logflare,supavisor,imgproxy,mailpit,studio,edge-runtime,storage-api
 npm run db:types
-npm run check      # typecheck · lint · 268 testes
-npm run db:test    # 4 arquivos pgTAP, 43 testes
+npm run check       # typecheck · lint · 254 testes, sem banco
+npm run db:test     # 4 arquivos pgTAP, 36 testes
+npm run test:parity # 22 casos de paridade SQL x TypeScript
 npm run build && npm run start
 ```
 

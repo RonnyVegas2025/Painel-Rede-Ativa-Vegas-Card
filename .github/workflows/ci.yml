@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
       - run: npm ci
       - run: npm run typecheck
@@ -20,13 +20,23 @@ jobs:
       - run: npm run test
 
   banco:
-    name: Migrations e pgTAP
+    name: Migrations, pgTAP e paridade
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
       - uses: supabase/setup-cli@v1
         with: { version: latest }
+      - run: npm ci
       # Sobe o stack local, aplica todas as migrations e roda o seed.
       - run: supabase db start
-      # Policy, constraint e trigger so se verificam de dentro do banco.
+      # Policy, constraint, trigger e os invariantes de grant e RLS do schema
+      # inteiro so se verificam de dentro do banco.
       - run: supabase test db
+      # Paridade SQL x TypeScript: mesma entrada nas duas implementacoes, saidas
+      # comparadas entre si. Vive aqui, e nao no job `aplicacao`, porque exige o
+      # banco no ar — e falha, em vez de pular, se ele nao responder.
+      - run: npm run test:parity

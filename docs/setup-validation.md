@@ -407,21 +407,25 @@ não deve mostrar Importações, Usuários, Configurações nem Atenção.
 ### V12 — Testes automatizados
 
 ```bash
-npm run test        # Vitest
+npm run test        # Vitest, sem banco
 npm run typecheck   # tsc estrito
 npm run lint        # ESLint
 npm run db:test     # pgTAP
+npm run test:parity # paridade SQL x TypeScript, exige o banco no ar
 ```
 
 Esperado:
 
-- Vitest: **268 testes, 10 arquivos, todos passando** (inclui contraste de token e
+- Vitest: **254 testes, 9 arquivos, todos passando** (inclui contraste de token e
   ausência de hexadecimal em componente)
 - typecheck: sem saída
 - lint: sem erro
-- pgTAP: 4 arquivos, `01` a `04`, todos `ok`
+- pgTAP: 4 arquivos — `01`, `02`, `03` e `05` — **36 testes**, todos `ok`
+- paridade: 1 arquivo, **22 testes**
 
-`npm run check` roda os três primeiros de uma vez.
+`npm run check` roda os três primeiros de uma vez. **`test:parity` fica de fora
+dele de propósito**: exige o banco local e falha, em vez de pular, se ele não
+responder. No CI vive no job `banco`, que já sobe o stack (ADR 0010).
 
 ---
 
@@ -479,7 +483,7 @@ Depois de `db reset` os usuários somem: refaça o passo 5.
 - [ ] V9 — auditoria grava alteração de parâmetro
 - [ ] V10 — login, redirecionamentos e mensagem de erro
 - [ ] V11 — diagnóstico com seis linhas verdes
-- [ ] V12 — 268 Vitest · typecheck · lint · 4 pgTAP
+- [ ] V12 — 254 Vitest · typecheck · lint · 36 pgTAP · 22 de paridade
 
 Falhando qualquer uma, me mande o comando, a saída e o passo. Corrigimos antes da
 Sprint 1.

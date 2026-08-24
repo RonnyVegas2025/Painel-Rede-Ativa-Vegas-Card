@@ -48,3 +48,21 @@ justamente onde o descuido custa caro.
 - O hook é ponto único de falha na emissão de token: erro ali derruba o login de todo mundo.
   Tem teste pgTAP próprio e tratamento defensivo com queda para `consulta`.
 - `auth_role()` nunca devolve nulo. Ausência de claim é `consulta`, o papel mais restrito.
+- **Promoção de papel exige o JWT de um gestor master. `service_role` não serve.**
+  A trigger `fn_protect_profile_fields` decide por `auth_role()`, que lê a claim
+  `user_role`. O token de `service_role` traz `role = service_role` e nenhum
+  `user_role`, então `auth_role()` devolve `consulta` e a trigger recusa — verificado
+  com o banco no ar durante a validação da Sprint 0.
+
+  Isso está certo e é deliberado: `service_role` ignora RLS, e uma tela de
+  administração que promovesse papel por ele daria a qualquer bug de rota o poder de
+  criar gestor master.
+
+  A consequência prática é para quem construir `usuarios.gerenciar`: **a alteração de
+  papel tem que sair do cliente autenticado do gestor**, com o token dele, e não do
+  `createAdminClient()`. Quem tentar pelo caminho do service role vai bater na trigger,
+  e a tentação será afrouxá-la sem entender por que ela existe. Não afrouxar.
+
+  A exceção da migration 0013 — conexão sem contexto HTTP — não ajuda aqui: ela cobre
+  `psql` e SQL Editor, onde não há claim nenhuma. Toda requisição pela API traz claims,
+  inclusive a de `service_role`, e portanto não a alcança.

@@ -23,6 +23,17 @@ Escopos parciais:
 - `system_settings`: cada chave tem `min_role`. `ADM` altera as chaves marcadas como
   administrativas; parâmetros estruturais ficam com `GM`.
 - `audit_logs`: ninguém tem `update` nem `delete`. `insert` só pela função de trigger.
+- `profiles.role`, `profiles.team_id` e `profiles.is_active`: alteráveis apenas por `GM`,
+  garantido pela trigger `fn_protect_profile_fields`, não por policy — policy de `update`
+  não distingue coluna. Sem a trigger, qualquer usuário se promoveria editando o próprio
+  perfil.
+
+  **A tela de gestão de usuários terá que promover papel com o JWT do gestor master, e
+  não com `service_role`.** A trigger decide por `auth_role()`, e o token de
+  `service_role` não carrega `user_role`: `auth_role()` cai para `consulta` e a operação
+  é recusada. É comportamento pretendido — `service_role` ignora RLS, e promoção por ele
+  transformaria qualquer descuido de rota em escalada de privilégio. Detalhe e
+  verificação no ADR 0005, seção Consequências.
 
 ## Sprints seguintes — intenção registrada
 
