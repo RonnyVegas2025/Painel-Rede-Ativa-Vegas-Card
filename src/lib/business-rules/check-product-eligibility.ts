@@ -27,13 +27,53 @@ export interface SegmentRule {
   ruleType: SegmentRuleType;
 }
 
+/**
+ * Segmento como a regra precisa ve-lo: com o vinculo de alias, nao so o id.
+ */
+export interface SegmentForEligibility {
+  id: string;
+  isActive: boolean;
+  /** Preenchido quando este segmento e ALIAS de outro (migration 0023). */
+  canonicalSegmentId: string | null;
+}
+
+/**
+ * Gemea da funcao SQL public.eligible_segment_ids.
+ *
+ * Regra em uma frase: um segmento e elegivel quando ele esta ativo, seu canonico
+ * esta ativo, e a regra mapeada AO CANONICO passa em isSegmentEligible.
+ *
+ * O alias existe porque `source_name` e a chave de reconciliacao da importacao:
+ * mapear `PADARIA E CONFEITARIA` para `Padaria` nao pode apagar nem desativar o
+ * duplicado, senao a importacao seguinte o recria ou passa a vincular
+ * estabelecimentos a segmento inativo (migration 0023).
+ *
+ * Consequencia deliberada: regra mapeada a um segmento que depois virou alias
+ * deixa de governar — quem governa e o canonico. E o proposito do alias.
+ *
+ * Devolve os ids ORDENADOS. Ordem estavel e o que torna o resultado comparavel
+ * com a gemea SQL pelo arnes de paridade.
+ */
 export function eligibleSegmentIds(
   mode: EligibilityMode,
-  activeSegmentIds: readonly string[],
+  segments: readonly SegmentForEligibility[],
   rules: readonly SegmentRule[],
 ): string[] {
-  const byId = new Map(rules.map((r) => [r.segmentId, r.ruleType]));
-  return activeSegmentIds.filter((id) => isSegmentEligible(mode, byId.get(id) ?? null));
+  const ruleByCanonical = new Map(rules.map((r) => [r.segmentId, r.ruleType]));
+  const activeById = new Map(segments.map((s) => [s.id, s.isActive]));
+
+  return segments
+    .filter((segment) => {
+      if (!segment.isActive) return false;
+
+      const canonicalId = segment.canonicalSegmentId ?? segment.id;
+      // Alias cujo canonico saiu de circulacao nao volta a ser elegivel sozinho.
+      if (activeById.get(canonicalId) !== true) return false;
+
+      return isSegmentEligible(mode, ruleByCanonical.get(canonicalId) ?? null);
+    })
+    .map((segment) => segment.id)
+    .sort();
 }
 
 /**

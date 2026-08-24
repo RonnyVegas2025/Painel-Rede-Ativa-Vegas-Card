@@ -12,7 +12,7 @@
 -- ser construida em cima.
 
 begin;
-select plan(6);
+select plan(8);
 
 -- 1. TRUNCATE ignora RLS -------------------------------------------------------
 -- Um usuario logado com TRUNCATE esvazia audit_logs sem passar por policy
@@ -142,6 +142,41 @@ select is(
    )),
   0,
   'nenhum papel dono de tabela em public concede privilegio padrao a anon'
+);
+
+-- 7 e 8. Views tambem sao superficie -----------------------------------------
+-- Os testes acima varrem `relkind = 'r'`: genericos quanto a QUAIS tabelas, e
+-- cegos quanto a relacoes que nao sao tabelas. A primeira view do schema expos
+-- isso, e o defeito foi real — `segment_normalization_queue` nasceu sem
+-- `security_invoker`, ignorando a RLS, e com privilegio de escrita vindo do
+-- padrao do schema. Um consultor conseguiu inserir em `segments` por ela.
+--
+-- Uma view sobre tabela com RLS precisa avaliar as policies de quem consulta, e
+-- nao pode aceitar escrita: view auto-atualizavel e porta para contornar a policy
+-- da tabela de baixo, e o privilegio padrao a concede sozinha em toda view nova.
+
+select is(
+  (select count(*)::int
+   from pg_class c
+   join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'public'
+     and c.relkind = 'v'
+     and coalesce(array_to_string(c.reloptions, ','), '') not like '%security_invoker=true%'),
+  0,
+  'toda view de public tem security_invoker: avalia a RLS de quem consulta'
+);
+
+select is(
+  (select count(*)::int
+   from information_schema.role_table_grants g
+   join pg_class c on c.relname = g.table_name
+   join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
+   where c.relkind = 'v'
+     and g.table_schema = 'public'
+     and g.privilege_type in ('INSERT', 'UPDATE', 'DELETE')
+     and g.grantee in ('anon', 'authenticated', 'service_role')),
+  0,
+  'nenhuma view de public aceita escrita: seria porta para contornar a policy da tabela'
 );
 
 select * from finish();
