@@ -738,6 +738,11 @@ export type Database = {
       }
     }
     Functions: {
+      apply_segment_rules: {
+        Args: { p_allow: string[]; p_deny: string[]; p_segment_id: string }
+        Returns: undefined
+      }
+      assert_usuario_identificado: { Args: never; Returns: string }
       auth_role: {
         Args: never
         Returns: Database["public"]["Enums"]["user_role"]
@@ -784,6 +789,33 @@ export type Database = {
         Returns: string
       }
       request_ip: { Args: never; Returns: unknown }
+      resolve_segment_confirm: {
+        Args: { p_allow?: string[]; p_deny?: string[]; p_segment_id: string }
+        Returns: undefined
+      }
+      resolve_segment_create: {
+        Args: {
+          p_allow?: string[]
+          p_category: string
+          p_deny?: string[]
+          p_normalized_name: string
+          p_segment_id: string
+        }
+        Returns: undefined
+      }
+      resolve_segment_deactivate: {
+        Args: { p_segment_id: string }
+        Returns: undefined
+      }
+      resolve_segment_map: {
+        Args: {
+          p_canonical_id: string
+          p_discard?: string[]
+          p_migrate?: string[]
+          p_segment_id: string
+        }
+        Returns: undefined
+      }
       segment_alias_blockers: {
         Args: { p_segment_id: string }
         Returns: {
