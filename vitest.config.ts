@@ -11,6 +11,11 @@ export default defineConfig({
     exclude: ["node_modules/**", "tests/parity-db/**"],
   },
   resolve: {
-    alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+      // Ver tests/stubs/server-only.ts: a garantia do pacote e de BUNDLE, e o
+      // teste nao monta bundle. `next build` continua exigindo o real.
+      "server-only": fileURLToPath(new URL("./tests/stubs/server-only.ts", import.meta.url)),
+    },
   },
 });

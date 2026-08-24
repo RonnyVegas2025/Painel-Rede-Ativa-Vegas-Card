@@ -80,29 +80,53 @@ de ruído, e o efeito prático é o mesmo.
 
 **A primeira importação nunca calcula ausentes** — não há contra o que comparar.
 
-## O que só o arquivo real responde
+## O que o arquivo real respondeu
 
-O `.xlsx` ainda não chegou. **O parser de E-005 não deve ser escrito sem ele:**
-cabeçalho mesclado, aba extra, linha em branco no fim e encoding não aparecem em
-nenhuma especificação — só no arquivo.
+O `.xlsx` chegou e foi medido: **1.804 linhas, 20 colunas**, recorte de São Paulo.
+As perguntas que estavam em aberto aqui deixaram de ser expectativa.
 
-Medições a fazer quando ele chegar, antes de decidir o índice de
-`establishment_capture_points`:
+| Medida | Valor | O que decidiu |
+|---|---|---|
+| linhas | 1.804 | — |
+| `Terminal` distintos | 13 | dimensão de `capture_methods` |
+| `Terminal` com dígito | **0** | `Terminal` não é número de terminal: é nome de adquirente e gateway, separados por ` / `. A chave `(capture_method_id, terminal_number)` não existe |
+| estabelecimentos com mais de um meio | maioria | `is_primary` é regra, não exceção |
+| `Subgrupo` distintos | 15 | tamanho inicial da fila de normalização |
+| linhas sem `Contrato` | **0** | o fallback do ADR 0001 não é exercitado por esta base — e continua necessário, porque a próxima pode exercitá-lo |
+| raízes de CNPJ distintas | 294 | o mesmo CNPJ tem vários endereços e contratos: CNPJ não é chave |
+| endereços com `N.º: 0` | 61 | sinalizados na prévia, não rejeitados |
+| `E-mail` com `-` | 1.255 | `-` é placeholder de vazio, normalizado para nulo |
+| documentos com 11 dígitos (CPF) | 1 | pessoa física credenciada — **conflito, não erro** |
+| `Nunca Transacionou` | 319 | `last_transaction_at = null` + `never_transacted = true` |
 
-| Medir | Decide |
-|---|---|
-| quantos `Terminal` distintos | dimensão da tabela |
-| quantos `Terminal` repetem entre estabelecimentos diferentes | se a unicidade é global |
-| quantos estabelecimentos têm mais de um `Terminal` | se `is_primary` é frequente ou exceção |
-| quantos `Subgrupo` distintos, e quantos fora dos 13 semeados | tamanho inicial da fila de normalização |
-| quantos `Captação` distintos | semeadura de `capture_methods` |
-| quantas linhas sem `Contrato` | peso real do fallback do ADR 0001 |
+### 3.586 partes brutas, 3.577 vínculos
 
-Expectativa a confirmar, não a assumir: o número de terminal é atribuído pelo
-adquirente, então a unicidade tende a ser **por meio de captura** — nem global,
-nem por estabelecimento. Se o arquivo mostrar repetição entre estabelecimentos, a
-chave é `(capture_method_id, terminal_number)`.
+A distinção importa e alguém vai refazê-la errado se ela não estiver escrita.
 
-**Enquanto a medição não existir, o importador registra colisão de terminal como
-conflito, não como rejeição.** Rejeitar linha por uma regra ainda não verificada
-perde dado real, e dado perdido na importação não volta.
+Somando as partes de `Terminal` de todas as linhas, dão **3.586**. Mas **9 linhas
+repetem o mesmo meio dentro da própria célula** — `CIELO / CIELO`,
+`Software Express Sitef / CIELO / Rede / Rede`. Como a identidade de um ponto de
+captura é `(establishment_id, capture_method_id)`, inserir as duas ocorrências
+violaria o índice único e a primeira importação inteira falharia.
+
+Deduplicadas, restam **3.577 vínculos** — e é esse o número esperado em
+`establishment_capture_points` depois da primeira importação.
+
+**3.586 conta partes brutas; 3.577 conta linhas gravadas.**
+
+A repetição é defeito da **origem**, não conflito: não bloqueia nada e não exige
+decisão. Mas a prévia **conta e reporta** as 9 em
+`import_jobs.duplicated_capture_methods`. Deduplicar em silêncio faria o dado
+errado voltar em toda importação sem ninguém notar, e quem mantém a base é quem
+pode corrigi-lo na fonte.
+
+### Distribuição de recência
+
+`293 recente · 285 atenção · 132 ação necessária · 775 crítico · 319 nunca transacionou`
+
+### O que o arquivo não respondeu
+
+Ele é um **recorte**: uma cidade, um momento. Nada aqui autoriza concluir que a
+base inteira tem as mesmas proporções — em particular, "zero linhas sem contrato"
+é uma propriedade deste arquivo, não da fonte. O fallback de identidade continua
+implementado e testado.

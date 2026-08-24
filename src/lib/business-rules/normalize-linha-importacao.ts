@@ -88,6 +88,15 @@ export interface LinhaNormalizada {
   enderecoHash: string | null;
   /** Sem número na origem (`N.º: 0`): o fallback de identidade fica fraco. */
   enderecoSemNumero: boolean;
+  /**
+   * `Terminal` repetia o mesmo meio — `CIELO / CIELO`.
+   *
+   * Registrado aqui porque a deduplicação acontece em `separarMeiosDeCaptura` e
+   * some sem deixar rastro. Defeito da ORIGEM, não conflito: não bloqueia nada.
+   * Mas deduplicar em silêncio faz o dado errado voltar em toda importação sem
+   * ninguém notar, e quem mantém a base é quem pode corrigir na fonte.
+   */
+  captureMethodsDuplicados: boolean;
   problemas: ProblemaDaLinha[];
 }
 
@@ -154,6 +163,13 @@ export function normalizeLinhaImportacao(linha: LinhaCrua): LinhaNormalizada {
           : `CNPJ com ${digitos.length} dígitos, esperado 14.`,
     });
   }
+
+  // As partes cruas antes de deduplicar: a diferença é o que se reporta.
+  const partesBrutas = vazio(linha.Terminal)
+    .split("/")
+    .map((p) => p.trim())
+    .filter((p) => p !== "");
+  const meios = separarMeiosDeCaptura(linha.Terminal);
 
   const endereco = parseEndereco(vazio(linha.Endereço));
   if (endereco === null) {
@@ -226,7 +242,8 @@ export function normalizeLinhaImportacao(linha: LinhaCrua): LinhaNormalizada {
     assignedConsultantsRaw: vazio(linha.Consultores) || null,
     origin: vazio(linha.Origem) || null,
     acquisitionChannel: vazio(linha.Captação) || null,
-    captureMethodSourceNames: separarMeiosDeCaptura(linha.Terminal),
+    captureMethodSourceNames: meios,
+    captureMethodsDuplicados: partesBrutas.length > meios.length,
     lastTransactionAt,
     neverTransacted,
     relationshipStartDate,
