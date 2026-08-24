@@ -14,7 +14,9 @@ import { NAV_GROUPS, NAV_ITEMS, type NavItem } from "./nav-items";
  */
 export function Sidebar({ role, collapsed }: { role: Role; collapsed: boolean }) {
   const pathname = usePathname();
-  const visible = NAV_ITEMS.filter((i) => i.permission === null || can(role, i.permission));
+  const visible = NAV_ITEMS.filter(
+    (i) => i.enabled && (i.permission === null || can(role, i.permission)),
+  );
 
   const groups = (Object.keys(NAV_GROUPS) as NavItem["group"][])
     .map((key) => ({ key, label: NAV_GROUPS[key], items: visible.filter((i) => i.group === key) }))

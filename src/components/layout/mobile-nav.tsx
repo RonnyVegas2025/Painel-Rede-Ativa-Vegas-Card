@@ -14,7 +14,7 @@ import { NAV_ITEMS } from "./nav-items";
 export function MobileNav({ role }: { role: Role }) {
   const pathname = usePathname();
   const items = NAV_ITEMS.filter(
-    (i) => i.mobile && (i.permission === null || can(role, i.permission)),
+    (i) => i.enabled && i.mobile && (i.permission === null || can(role, i.permission)),
   ).slice(0, 5);
 
   return (
