@@ -7,7 +7,7 @@
 -- parciais desta sprint.
 
 begin;
-select plan(22);
+select plan(18);
 
 -- Fixtures locais. O rollback no fim descarta tudo.
 insert into public.establishments (id, external_contract, cnpj, legal_name, trade_name)
@@ -39,8 +39,14 @@ select throws_ok(
 -- Sem isto, "mudou de endereco" deixa dois correntes e o check-in por raio da
 -- Sprint 3 passa a usar coordenada arbitraria — bug longe da causa.
 
-insert into public.establishment_addresses (establishment_id, street, cep, city, state, is_current)
-values ('11111111-1111-1111-1111-111111111111', 'Av. Paulista, 1578', '01310200', 'Sao Paulo', 'SP', true);
+-- A base real traz `Logradouro - N.º: X - Bairro`. `street` guarda a string
+-- bruta; os componentes parseados alimentam o hash (migrations 0027 e 0028).
+insert into public.establishment_addresses
+  (establishment_id, street, street_name, street_number, district, cep, city, state, is_current)
+values ('11111111-1111-1111-1111-111111111111',
+        'Rua Harmonia - N.º: 373 - Sumarezinho',
+        'Rua Harmonia', '373', 'Sumarezinho',
+        '01310200', 'Sao Paulo', 'SP', true);
 
 select throws_ok(
   $$ insert into public.establishment_addresses (establishment_id, street, city, state, is_current)
@@ -72,48 +78,62 @@ select throws_ok(
   'normalized_address nao aceita escrita: quem calcula e o banco'
 );
 
+-- Valor esperado explicito, e nao a formula repetida: o hash e sobre os
+-- COMPONENTES, entao o rotulo `N.º:` do formulario de origem nao entra. Se ele
+-- entrasse, o resultado traria "n o" no meio.
 select is(
   (select normalized_address from public.establishment_addresses
    where establishment_id = '11111111-1111-1111-1111-111111111111' and is_current),
-  public.normalize_address('Av. Paulista, 1578', '01310200'),
-  'normalized_address gravado e o resultado da propria funcao'
+  'rua harmonia 373 sumarezinho 01310200',
+  'normalized_address vem dos componentes: o rotulo do formulario fica de fora'
 );
 
 -- ===========================================================================
 -- Pontos de captura
 -- ===========================================================================
 
-insert into public.establishment_capture_points (establishment_id, terminal_number, status, is_primary)
-values ('11111111-1111-1111-1111-111111111111', 'T-100', 'ativo', true);
+-- A base real nao tem numero de terminal: a coluna `Terminal` traz nome de
+-- adquirente e gateway separados por `/`, e zero dos 1.804 valores contem digito.
+-- Uma linha por MEIO por estabelecimento, com terminal_number nulo.
+insert into public.establishment_capture_points
+  (establishment_id, capture_method_id, terminal_number, status, is_primary)
+values ('11111111-1111-1111-1111-111111111111', null, null, 'ativo', true);
+
+select lives_ok(
+  $$ insert into public.establishment_capture_points
+       (establishment_id, terminal_number, status)
+     values ('11111111-1111-1111-1111-111111111111', null, 'ativo') $$,
+  'varios meios no mesmo estabelecimento convivem: 661 tem tres na base real'
+);
 
 select throws_ok(
-  $$ insert into public.establishment_capture_points (establishment_id, terminal_number, is_primary)
-     values ('11111111-1111-1111-1111-111111111111', 'T-200', true) $$,
+  $$ insert into public.establishment_capture_points (establishment_id, is_primary)
+     values ('11111111-1111-1111-1111-111111111111', true) $$,
   23505,
   null,
   'dois pontos primarios no mesmo estabelecimento sao recusados'
 );
 
+-- `is_primary` nao e derivavel da planilha: deduzir o principal pela ordem em que
+-- os meios aparecem numa string seria dado fabricado. Fica nulo, e o indice
+-- parcial simplesmente nao dispara — o que precisa continuar sendo verdade.
 select lives_ok(
-  $$ insert into public.establishment_capture_points (establishment_id, terminal_number, is_primary)
-     values ('11111111-1111-1111-1111-111111111111', 'T-200', false) $$,
-  'segundo ponto nao primario e aceito'
+  $$ insert into public.establishment_capture_points (establishment_id, is_primary)
+     values ('11111111-1111-1111-1111-111111111111', null),
+            ('11111111-1111-1111-1111-111111111111', null) $$,
+  'varios pontos com is_primary nulo convivem: nulo nao e primario'
 );
 
-select throws_ok(
-  $$ insert into public.establishment_capture_points (establishment_id, terminal_number, status)
-     values ('11111111-1111-1111-1111-111111111111', 'T-100', 'ativo') $$,
-  23505,
-  null,
-  'terminal repetido entre pontos ATIVOS do mesmo estabelecimento e recusado'
-);
-
--- O indice e parcial de proposito: equipamento trocado deixa o ponto antigo como
--- historico, e ponto historico nao pode bloquear o novo.
-select lives_ok(
-  $$ insert into public.establishment_capture_points (establishment_id, terminal_number, status)
-     values ('11111111-1111-1111-1111-111111111111', 'T-100', 'substituido') $$,
-  'o mesmo terminal convive se o ponto antigo esta substituido'
+-- Nao ha unicidade de terminal, e a ausencia e deliberada. Se alguem recriar o
+-- indice por simetria com o desenho antigo, a importacao passa a rejeitar as
+-- ~3.600 linhas em que terminal_number e nulo.
+select is(
+  (select count(*)::int from pg_indexes
+    where schemaname = 'public'
+      and tablename = 'establishment_capture_points'
+      and indexdef ilike '%terminal_number%'),
+  0,
+  'nao existe indice sobre terminal_number: a base nao tem numero de terminal'
 );
 
 -- ===========================================================================
@@ -141,12 +161,14 @@ select lives_ok(
 -- capture_methods nasce vazia
 -- ===========================================================================
 -- Semear com nomes escolhidos a mao criaria o mesmo defeito de reconciliacao que
--- source_name existe para evitar: se a planilha grafar "STONE PAGAMENTOS", o seed
--- cria um registro e o importador cria outro.
+-- source_name existe para evitar. E a origem nao e `Captacao`, como se supunha:
+-- aquela coluna diz como o comercio foi CREDENCIADO — Pessoalmente, E-Mail,
+-- Telefone — e virou establishments.acquisition_channel. Os meios vem de
+-- `Terminal`, separados por `/`.
 select is(
   (select count(*)::int from public.capture_methods),
   0,
-  'capture_methods nasce vazia: quem popula e o importador, pelo valor cru de Captacao'
+  'capture_methods nasce vazia: quem popula e o importador, pelo valor cru de Terminal'
 );
 
 -- ===========================================================================
@@ -191,13 +213,31 @@ select is(
 -- Quem alterar a funcao tem de recalcular na mesma migration, com um `update`
 -- que force a regravacao das colunas geradas. Se nao fizer, isto falha no CI.
 
--- A invariante propriamente dita. Em CI a tabela esta vazia, entao aqui ela vale
--- sobre as fixtures acima; depois da primeira importacao real vale sobre a base.
+-- COMO A VERIFICACAO E FEITA, E POR QUE MUDOU
+--
+-- A primeira versao repetia a formula da coluna gerada dentro do teste. A
+-- migration 0028 mudou a expressao — passou a usar os componentes em vez da
+-- string bruta — e o teste passou a acusar divergencia onde nao havia: ele
+-- comparava o valor gravado com uma formula que ja nao era a da coluna.
+--
+-- Restar a formula e sempre isso: duas copias livres para divergir, e o teste
+-- vira fonte de alarme falso ou, pior, de falso silencio.
+--
+-- Agora a verificacao NAO conhece a formula. Ela guarda o valor gravado, forca a
+-- regeracao com um update que nao muda dado nenhum, e compara. O que a coluna
+-- produzir hoje tem de ser igual ao que esta la.
+create temp table _gerado_antes as
+  select id, normalized_address, address_hash from public.establishment_addresses;
+
+update public.establishment_addresses set cep = cep;
+
 select is_empty(
-  $$ select id from public.establishment_addresses
-     where normalized_address is distinct from public.normalize_address(street, cep)
-        or address_hash is distinct from md5(public.normalize_address(street, cep)) $$,
-  'nenhum valor gravado diverge do recalculo pela funcao atual'
+  $$ select a.id
+       from public.establishment_addresses a
+       join _gerado_antes b on b.id = a.id
+      where a.normalized_address is distinct from b.normalized_address
+         or a.address_hash       is distinct from b.address_hash $$,
+  'nenhum valor gravado diverge do que a funcao atual produz'
 );
 
 -- A verificacao acima, sozinha, NAO TEM DENTES sobre as proprias fixtures: elas
@@ -216,10 +256,14 @@ returns text language plpgsql immutable set search_path = '' as $adulterada$
 begin return 'REGRA-DIVERGENTE'; end;
 $adulterada$;
 
+update public.establishment_addresses set cep = cep;
+
 select isnt_empty(
-  $$ select id from public.establishment_addresses
-     where normalized_address is distinct from public.normalize_address(street, cep) $$,
-  'a verificacao ACUSA quando a funcao muda sem recalculo: o valor gravado fica na regra antiga'
+  $$ select a.id
+       from public.establishment_addresses a
+       join _gerado_antes b on b.id = a.id
+      where a.normalized_address is distinct from b.normalized_address $$,
+  'a verificacao ACUSA quando a funcao muda: o valor regerado difere do gravado'
 );
 
 do $restaura$
@@ -230,47 +274,14 @@ begin
 end
 $restaura$;
 
+update public.establishment_addresses set cep = cep;
+
 select is_empty(
-  $$ select id from public.establishment_addresses
-     where normalized_address is distinct from public.normalize_address(street, cep) $$,
+  $$ select a.id
+       from public.establishment_addresses a
+       join _gerado_antes b on b.id = a.id
+      where a.normalized_address is distinct from b.normalized_address $$,
   'restaurada a funcao, a divergencia desaparece: era a funcao, nao o dado'
-);
-
--- ===========================================================================
--- Ocupacao do terminal: quais estados prendem o numero
--- ===========================================================================
--- Com os seis valores do complemento §11, a pergunta deixou de ser "qual estado
--- esta em uso" e passou a ser qual conjunto OCUPA o numero.
---   ocupam    ativo · em_homologacao · com_erro
---   liberam   inativo · substituido · cancelado
-
-select lives_ok(
-  $$ insert into public.establishment_capture_points (establishment_id, terminal_number, status)
-     values ('11111111-1111-1111-1111-111111111111', 'T-300', 'com_erro') $$,
-  'ponto com_erro e aceito num terminal livre'
-);
-
--- Ponto com erro continua alocado: o problema e do equipamento, nao da alocacao.
--- Liberar aqui deixaria cadastrar um ponto novo com o mesmo terminal enquanto o
--- atendimento do antigo corre, que e o caso de uso da Sprint 7.
-select throws_ok(
-  $$ insert into public.establishment_capture_points (establishment_id, terminal_number, status)
-     values ('11111111-1111-1111-1111-111111111111', 'T-300', 'ativo') $$,
-  23505,
-  null,
-  'com_erro OCUPA o terminal: um segundo ponto no mesmo numero e recusado'
-);
-
-select lives_ok(
-  $$ insert into public.establishment_capture_points (establishment_id, terminal_number, status)
-     values ('11111111-1111-1111-1111-111111111111', 'T-400', 'cancelado') $$,
-  'ponto cancelado e aceito'
-);
-
-select lives_ok(
-  $$ insert into public.establishment_capture_points (establishment_id, terminal_number, status)
-     values ('11111111-1111-1111-1111-111111111111', 'T-400', 'ativo') $$,
-  'cancelado LIBERA o terminal: o numero volta a ser reivindicavel'
 );
 
 select * from finish();

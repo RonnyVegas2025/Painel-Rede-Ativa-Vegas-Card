@@ -35,34 +35,32 @@ on conflict (slug) do nothing;
 -- Segmentos iniciais.
 -- source_name imita o valor cru da coluna Subgrupo. A lista definitiva sai da
 -- planilha real na Sprint 1; isto e so o suficiente para o seed e os testes.
-insert into public.segments (source_name, normalized_name, category) values
-  ('SUPERMERCADO',         'Supermercado',          'alimentacao'),
-  ('MERCEARIA',            'Mercearia',             'alimentacao'),
-  ('ACOUGUE',              'Açougue',               'alimentacao'),
-  ('HORTIFRUTI',           'Hortifrúti',            'alimentacao'),
-  ('PADARIA',              'Padaria',               'refeicao'),
-  ('RESTAURANTE',          'Restaurante',           'refeicao'),
-  ('LANCHONETE',           'Lanchonete',            'refeicao'),
-  ('CONVENIENCIA',         'Loja de conveniência',  'refeicao'),
-  ('POSTO DE COMBUSTIVEL', 'Posto de combustível',  'combustivel'),
-  ('FARMACIA',             'Farmácia',              'farmacia'),
-  ('DROGARIA',             'Drogaria',              'farmacia'),
-  ('VESTUARIO',            'Vestuário',             'outros'),
-  ('MATERIAL DE CONSTRUCAO','Material de construção','outros')
-on conflict (source_name) do nothing;
-
--- Elegibilidade ---------------------------------------------------------------
--- Vegas Day e Plus sao 'all': nao recebem linha nenhuma, de proposito.
-insert into public.product_segments (card_product_id, segment_id, rule_type)
-select p.id, s.id, 'allow'
-from public.card_products p
-join public.segments s on (
-     (p.slug = 'alimentacao' and s.category in ('alimentacao','refeicao'))
-  or (p.slug = 'refeicao'    and s.category = 'refeicao')
-  or (p.slug = 'combustivel' and s.category = 'combustivel')
-  or (p.slug = 'farmacia'    and s.category = 'farmacia')
-)
-on conflict (card_product_id, segment_id) do nothing;
+-- ===========================================================================
+-- segments e product_segments NAO sao semeados. Deliberadamente.
+-- ===========================================================================
+-- O seed anterior trazia 13 segmentos escolhidos a mao — SUPERMERCADO, PADARIA,
+-- FARMACIA — e derivava 15 regras de elegibilidade deles.
+--
+-- A medicao da base real mostrou intersecao ZERO com esses 13. Os valores reais
+-- de `Subgrupo` sao frases descritivas, com os erros da origem:
+--
+--   Comercio Verejista - Supermercados                  826 linhas  (typo: "Verejista")
+--   Comercio varejista de produtos farmaceutico         594 linhas  (sem o `s`)
+--   Restaurantes e outros estabelecimentos de servicos  148 linhas
+--
+-- Manter o seed produziria duas populacoes convivendo: 13 segmentos orfaos que
+-- nunca casam com nada, mais os 15 reais criados pela importacao. E a disciplina
+-- de `source_name` — valor cru como chave de reconciliacao — perderia o sentido
+-- se o valor cru fosse escolhido por nos em vez de vir da origem.
+--
+-- A importacao popula. A fila de normalizacao em /segmentos mapeia os reais para
+-- canonicos, e so entao as regras de elegibilidade sao criadas em /produtos,
+-- contra segmentos que existem de fato.
+--
+-- Consequencia operacional, que e a falha fechada do ADR 0003 funcionando como
+-- desenhada: entre a primeira importacao e a resolucao da fila, NENHUM
+-- estabelecimento e elegivel a Farmacia, Alimentacao, Refeicao ou Combustivel.
+-- A fila deixa de ser preparacao e vira pre-requisito da primeira importacao.
 
 -- Equipe de exemplo -----------------------------------------------------------
 insert into public.teams (name) values ('Rede São Paulo - Capital')

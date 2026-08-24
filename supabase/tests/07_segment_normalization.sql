@@ -5,7 +5,7 @@
 -- legitimo fica invisivel e ninguem sabe por que.
 
 begin;
-select plan(12);
+select plan(15);
 
 -- Um usuario, para `reviewed_by`. profiles.id referencia auth.users, e o perfil
 -- nasce da trigger fn_handle_new_user — inserir em auth.users e o caminho real.
@@ -96,6 +96,50 @@ select is(
    ) t),
   2,
   'antes de desativar, os dois estao elegiveis'
+);
+
+-- ===========================================================================
+-- Aliasar segmento com regra pendurada nao pode passar calado
+-- ===========================================================================
+-- Quem governa passa a ser o canonico, entao a regra do aliasado continua na
+-- tabela, visivel na tela de modalidades, e para de valer. E pior que a falha
+-- fechada original: ali o segmento sumia e aparecia na fila; aqui a regra fica
+-- visivel e inerte.
+
+-- Segmento limpo, sem aliases apontando para ele: aqui o unico impedimento a
+-- testar e a regra pendurada, e nao a protecao de um nivel ja verificada acima.
+insert into public.segments (id, source_name, normalized_name, category)
+values ('dddddddd-0000-4000-8000-000000000004', 'TESTE ACOUGUE', 'Acougue', 'alimentacao');
+
+insert into public.product_segments (card_product_id, segment_id, rule_type)
+values ('cccccccc-0000-4000-8000-000000000001', 'dddddddd-0000-4000-8000-000000000004', 'allow');
+
+select throws_ok(
+  $$ update public.segments
+        set canonical_segment_id = 'dddddddd-0000-4000-8000-000000000001'
+      where id = 'dddddddd-0000-4000-8000-000000000004' $$,
+  'P0001',
+  null,
+  'aliasar segmento com regra de elegibilidade e recusado pelo banco'
+);
+
+-- A tela precisa listar QUAIS regras bloqueiam e quantos estabelecimentos mudam
+-- de modalidade — nao basta dizer que existem.
+select isnt_empty(
+  $$ select card_product_name from public.segment_alias_blockers(
+       'dddddddd-0000-4000-8000-000000000004') $$,
+  'segment_alias_blockers lista as regras que impedem o mapeamento'
+);
+
+-- Resolvidas as regras, o mapeamento passa. E a ordem que a tela impoe.
+delete from public.product_segments
+ where segment_id = 'dddddddd-0000-4000-8000-000000000004';
+
+select lives_ok(
+  $$ update public.segments
+        set canonical_segment_id = 'dddddddd-0000-4000-8000-000000000001'
+      where id = 'dddddddd-0000-4000-8000-000000000004' $$,
+  'sem regra pendurada, o mapeamento e aceito'
 );
 
 -- ===========================================================================

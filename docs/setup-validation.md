@@ -202,13 +202,28 @@ system_settings, teams` · `deve_ser_zero = 0` · índice sobre
 ```sql
 select
   (select count(*) from public.card_products)    as modalidades,   -- 6
-  (select count(*) from public.segments)         as segmentos,     -- 13
-  (select count(*) from public.product_segments) as elegibilidade, -- 15
+  (select count(*) from public.segments)         as segmentos,     -- 0
+  (select count(*) from public.product_segments) as elegibilidade, -- 0
   (select count(*) from public.system_settings)  as parametros;    -- 7
 ```
 
-Vegas Day e Plus não têm vínculo em `product_segments`, e isso está certo: modo
-`all` não usa vínculo.
+> **Segmentos e elegibilidade em zero é o estado correto**, não seed que falhou.
+>
+> O seed trazia 13 segmentos escolhidos à mão. A medição da base real mostrou
+> **interseção zero** com eles: os valores de `Subgrupo` são frases descritivas,
+> com os erros da origem — `Comércio Verejista - Supermercados` em 826 linhas, com
+> o typo, e `produtos farmacêutico` sem o `s`.
+>
+> Manter o seed criaria duas populações convivendo: 13 segmentos órfãos que nunca
+> casam com nada, mais os 15 reais criados pela importação. E a disciplina de
+> `source_name` — valor cru como chave de reconciliação — perderia o sentido se o
+> valor cru fosse escolhido por nós.
+>
+> A importação popula. A fila em `/segmentos` mapeia para canônicos, e só então as
+> regras são criadas em `/produtos`, contra segmentos que existem de fato.
+
+Vegas Day e Plus não usam vínculo em `product_segments`, e isso está certo: modo
+`all` não precisa.
 
 ### V4 — Elegibilidade: Farmácia não exibe posto
 
@@ -223,10 +238,18 @@ where p.slug in ('farmacia', 'vegas-day')
 order by 1, 2;
 ```
 
-Esperado: **Farmácia** com exatamente `Drogaria` e `Farmácia`, sem
-`Posto de combustível`. **Vegas Day** com os 13 segmentos.
+Antes da primeira importação, **as duas devolvem vazio** — não há segmento
+cadastrado. É a falha fechada do ADR 0003 funcionando: sem segmento mapeado,
+nenhum estabelecimento é elegível a modalidade restrita.
 
-Se Farmácia trouxer posto, a falha fechada está furada — pare e reporte.
+O critério de aceite continua verificado, com fixtures próprias, em
+`supabase/tests/07_segment_normalization.sql` — que é mais forte que verificar
+contra seed, porque exercita também a resolução por alias.
+
+Depois da primeira importação, esta consulta passa a ser o teste operacional:
+**Farmácia** deve trazer apenas os segmentos farmacêuticos mapeados, e nunca
+`Comércio de combustíveis`. Se trouxer, a falha fechada está furada — pare e
+reporte.
 
 ### V5 — Custom Access Token Hook
 

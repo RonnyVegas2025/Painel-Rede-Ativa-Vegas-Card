@@ -129,6 +129,7 @@ export type Database = {
           cep: string | null
           city: string
           created_at: string
+          district: string | null
           establishment_id: string
           id: string
           is_current: boolean
@@ -137,6 +138,8 @@ export type Database = {
           normalized_address: string | null
           state: string
           street: string
+          street_name: string | null
+          street_number: string | null
           updated_at: string
         }
         Insert: {
@@ -144,6 +147,7 @@ export type Database = {
           cep?: string | null
           city: string
           created_at?: string
+          district?: string | null
           establishment_id: string
           id?: string
           is_current?: boolean
@@ -152,6 +156,8 @@ export type Database = {
           normalized_address?: string | null
           state: string
           street: string
+          street_name?: string | null
+          street_number?: string | null
           updated_at?: string
         }
         Update: {
@@ -159,6 +165,7 @@ export type Database = {
           cep?: string | null
           city?: string
           created_at?: string
+          district?: string | null
           establishment_id?: string
           id?: string
           is_current?: boolean
@@ -167,6 +174,8 @@ export type Database = {
           normalized_address?: string | null
           state?: string
           street?: string
+          street_name?: string | null
+          street_number?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -185,9 +194,9 @@ export type Database = {
           created_at: string
           establishment_id: string
           id: string
-          is_primary: boolean
+          is_primary: boolean | null
           status: Database["public"]["Enums"]["capture_point_status"]
-          terminal_number: string
+          terminal_number: string | null
           updated_at: string
         }
         Insert: {
@@ -195,9 +204,9 @@ export type Database = {
           created_at?: string
           establishment_id: string
           id?: string
-          is_primary?: boolean
+          is_primary?: boolean | null
           status?: Database["public"]["Enums"]["capture_point_status"]
-          terminal_number: string
+          terminal_number?: string | null
           updated_at?: string
         }
         Update: {
@@ -205,9 +214,9 @@ export type Database = {
           created_at?: string
           establishment_id?: string
           id?: string
-          is_primary?: boolean
+          is_primary?: boolean | null
           status?: Database["public"]["Enums"]["capture_point_status"]
-          terminal_number?: string
+          terminal_number?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -229,6 +238,7 @@ export type Database = {
       }
       establishments: {
         Row: {
+          acquisition_channel: string | null
           cnpj: string | null
           created_at: string
           description: string | null
@@ -249,6 +259,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          acquisition_channel?: string | null
           cnpj?: string | null
           created_at?: string
           description?: string | null
@@ -269,6 +280,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          acquisition_channel?: string | null
           cnpj?: string | null
           created_at?: string
           description?: string | null
@@ -289,6 +301,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "establishments_segment_id_fkey"
+            columns: ["segment_id"]
+            isOneToOne: false
+            referencedRelation: "segment_normalization_queue"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "establishments_segment_id_fkey"
             columns: ["segment_id"]
@@ -481,6 +500,13 @@ export type Database = {
             foreignKeyName: "product_segments_segment_id_fkey"
             columns: ["segment_id"]
             isOneToOne: false
+            referencedRelation: "segment_normalization_queue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_segments_segment_id_fkey"
+            columns: ["segment_id"]
+            isOneToOne: false
             referencedRelation: "segments"
             referencedColumns: ["id"]
           },
@@ -532,36 +558,66 @@ export type Database = {
       }
       segments: {
         Row: {
+          aponta_canonico: boolean | null
+          canonical_segment_id: string | null
           category: string
           cnae_hint: string | null
           created_at: string
+          eh_canonico: boolean | null
           id: string
           is_active: boolean
           normalized_name: string
+          reviewed_at: string | null
+          reviewed_by: string | null
           source_name: string
           updated_at: string
         }
         Insert: {
+          aponta_canonico?: boolean | null
+          canonical_segment_id?: string | null
           category?: string
           cnae_hint?: string | null
           created_at?: string
+          eh_canonico?: boolean | null
           id?: string
           is_active?: boolean
           normalized_name: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           source_name: string
           updated_at?: string
         }
         Update: {
+          aponta_canonico?: boolean | null
+          canonical_segment_id?: string | null
           category?: string
           cnae_hint?: string | null
           created_at?: string
+          eh_canonico?: boolean | null
           id?: string
           is_active?: boolean
           normalized_name?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           source_name?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "segments_alias_um_nivel"
+            columns: ["canonical_segment_id", "aponta_canonico"]
+            isOneToOne: false
+            referencedRelation: "segments"
+            referencedColumns: ["id", "eh_canonico"]
+          },
+          {
+            foreignKeyName: "segments_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       system_settings: {
         Row: {
@@ -647,7 +703,39 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      segment_normalization_queue: {
+        Row: {
+          canonical_segment_id: string | null
+          category: string | null
+          cnae_hint: string | null
+          establishments_hidden: number | null
+          id: string | null
+          is_active: boolean | null
+          normalized_name: string | null
+          source_name: string | null
+        }
+        Insert: {
+          canonical_segment_id?: string | null
+          category?: string | null
+          cnae_hint?: string | null
+          establishments_hidden?: never
+          id?: string | null
+          is_active?: boolean | null
+          normalized_name?: string | null
+          source_name?: string | null
+        }
+        Update: {
+          canonical_segment_id?: string | null
+          category?: string | null
+          cnae_hint?: string | null
+          establishments_hidden?: never
+          id?: string | null
+          is_active?: boolean | null
+          normalized_name?: string | null
+          source_name?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       auth_role: {
@@ -665,6 +753,14 @@ export type Database = {
         Returns: Database["public"]["Enums"]["transaction_status"]
       }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
+      eligible_segment_ids: {
+        Args: {
+          p_mode: Database["public"]["Enums"]["eligibility_mode"]
+          p_rules: Json
+          p_segments: Json
+        }
+        Returns: string[]
+      }
       eligible_segments: {
         Args: { p_card_product_id: string }
         Returns: {
@@ -688,6 +784,15 @@ export type Database = {
         Returns: string
       }
       request_ip: { Args: never; Returns: unknown }
+      segment_alias_blockers: {
+        Args: { p_segment_id: string }
+        Returns: {
+          card_product_id: string
+          card_product_name: string
+          establishments_afetados: number
+          rule_type: Database["public"]["Enums"]["segment_rule_type"]
+        }[]
+      }
     }
     Enums: {
       audit_action: "insert" | "update" | "delete" | "login" | "custom"

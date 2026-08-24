@@ -75,13 +75,23 @@ export default async function DiagnosticoPage() {
     },
     {
       label: "Segmentos",
-      ok: (segmentos.count ?? 0) > 0,
-      detail: `${segmentos.count ?? 0} cadastrados`,
+      // Vazio antes da primeira importacao e o estado CORRETO: segments nao e
+      // semeado, porque os valores reais de Subgrupo vem da planilha e sao a
+      // chave de reconciliacao. Marcar vermelho aqui faria uma instalacao nova
+      // parecer quebrada.
+      ok: true,
+      detail:
+        (segmentos.count ?? 0) > 0
+          ? `${segmentos.count ?? 0} cadastrados`
+          : "nenhum ainda — populados pela primeira importação, não por seed",
     },
     {
       label: "Regras de elegibilidade",
-      ok: (elegibilidade.count ?? 0) > 0,
-      detail: `${elegibilidade.count ?? 0} vínculos · Vegas Day e Plus não usam vínculo (modo all)`,
+      ok: true,
+      detail:
+        (elegibilidade.count ?? 0) > 0
+          ? `${elegibilidade.count ?? 0} vínculos · Vegas Day e Plus não usam vínculo (modo all)`
+          : "nenhuma ainda — criadas em /produtos depois de a fila de /segmentos ser resolvida",
     },
     {
       label: "Parâmetros operacionais",

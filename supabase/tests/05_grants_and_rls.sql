@@ -10,9 +10,20 @@
 -- Se uma migration futura criar tabela sem RLS, deixar TRUNCATE para anon ou
 -- escrever policy sem o grant correspondente, isto falha no CI antes de a tela
 -- ser construida em cima.
+--
+-- ESTE ARQUIVO E PECA ESTRUTURAL, NAO VERIFICACAO DE CONVENIENCIA.
+--
+-- `alter default privileges ... on tables` cobre tabelas E views no PostgreSQL:
+-- nao ha como conceder DML por padrao a tabela sem conceder a view. Ou seja, toda
+-- view nova do schema nasce com privilegio de escrita, e a unica coisa entre isso
+-- e uma escalada de privilegio sao as assercoes 7 e 8 abaixo.
+--
+-- Ja aconteceu: `segment_normalization_queue` nasceu assim, e um consultor_campo
+-- inseriu em `public.segments` por um POST na view, contornando a policy que
+-- exige is_admin(). Enfraquecer esta varredura reabre aquilo. Ver ADR 0012.
 
 begin;
-select plan(8);
+select plan(11);
 
 -- 1. TRUNCATE ignora RLS -------------------------------------------------------
 -- Um usuario logado com TRUNCATE esvazia audit_logs sem passar por policy
@@ -47,9 +58,9 @@ select is(
   (select count(*)::int
    from pg_class c
    join pg_namespace n on n.oid = c.relnamespace
-   where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity),
+   where n.nspname = 'public' and c.relkind in ('r', 'p') and not c.relrowsecurity),
   0,
-  'toda tabela de public tem RLS habilitada'
+  'toda tabela de public tem RLS habilitada, particionada inclusive'
 );
 
 -- 4. Nenhuma policy e codigo morto ---------------------------------------------
@@ -177,6 +188,46 @@ select is(
      and g.grantee in ('anon', 'authenticated', 'service_role')),
   0,
   'nenhuma view de public aceita escrita: seria porta para contornar a policy da tabela'
+);
+
+-- 9, 10 e 11. Os outros tipos de relacao ---------------------------------------
+-- Estender de 'r' para incluir 'v' fechou a view, e deixou tres pontos cegos. O
+-- tratamento correto nao e o mesmo para os tres.
+
+-- View materializada NAO SUPORTA RLS, de forma nenhuma: `security_invoker` nao se
+-- aplica. Matview sobre tabela protegida e vazamento por construcao, nao por
+-- descuido. Quem precisar de uma abre excecao explicita, com revisao.
+select is(
+  (select count(*)::int
+   from pg_class c
+   join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'public' and c.relkind = 'm'),
+  0,
+  'nenhuma view materializada em public: matview nao suporta RLS'
+);
+
+-- Tabela estrangeira nao tem razao para existir aqui. Se aparecer, e sinal de
+-- integracao montada fora do desenho.
+select is(
+  (select count(*)::int
+   from pg_class c
+   join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'public' and c.relkind = 'f'),
+  0,
+  'nenhuma tabela estrangeira em public'
+);
+
+-- Tabela particionada: verificar como tabela. A RLS se declara no PAI, e uma
+-- varredura que so olha 'r' verifica as particoes e ignora o pai — que e onde a
+-- politica vive. Chega na Sprint 8: transaction_hourly_metrics e particionada por
+-- mes no desenho.
+select is(
+  (select count(*)::int
+   from pg_class c
+   join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'public' and c.relkind = 'p' and not c.relrowsecurity),
+  0,
+  'toda tabela particionada de public tem RLS habilitada no pai'
 );
 
 select * from finish();

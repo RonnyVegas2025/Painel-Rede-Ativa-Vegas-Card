@@ -34,6 +34,15 @@ export interface Establishment {
   phone: string | null;
   email: string | null;
   origin: string | null;
+  /**
+   * Coluna `Captacao` da planilha: como o comercio foi CREDENCIADO —
+   * `Pessoalmente`, `E-Mail`, `Telefone`, `Site`, `Licitacao`.
+   *
+   * Nao confundir com meio de captura de transacao, que e `CaptureMethod` e vem
+   * da coluna `Terminal`. A confusao entre os dois chegou a virar instrucao de
+   * projeto antes de a base real ser medida.
+   */
+  acquisitionChannel: string | null;
   description: string | null;
   isActive: boolean;
   createdAt: string;
@@ -47,14 +56,27 @@ export interface Establishment {
 export interface EstablishmentAddress {
   id: string;
   establishmentId: string;
+  /**
+   * Endereco bruto da planilha, preservado intocado — inclusive o rotulo `N.º:`
+   * do formulario de origem (ADR 0006).
+   */
   street: string;
+  /** Logradouro, do padrao `Logradouro - N.º: X - Bairro`. Alimenta o hash. */
+  streetName: string | null;
+  /** Numero. `0` na origem significa sem numero: 61 casos na base real. */
+  streetNumber: string | null;
+  /** Bairro, do mesmo padrao. Alimenta o hash. */
+  district: string | null;
   cep: string | null;
   city: string;
   state: string;
   /**
    * GERADA PELO BANCO. `readonly` aqui nao e estilo: a coluna e
-   * `generated always as (normalize_address(street, cep)) stored` e recusa
-   * escrita. Quem calcula e o banco, para que um defeito no importador nao possa
+   * `generated always as (...) stored` e recusa escrita.
+   *
+   * Calculada sobre os COMPONENTES — logradouro, numero e bairro — e nao sobre
+   * `street`. O rotulo `N.º:` do formulario de origem fica fora do hash: se ele
+   * mudar na origem, os hashes nao mudam junto (migration 0028). Quem calcula e o banco, para que um defeito no importador nao possa
    * gravar hash divergente — divergencia em hash persistido so se corrige com
    * migracao de dados (ADR 0001).
    *
@@ -100,20 +122,36 @@ export const CAPTURE_POINT_OCCUPYING_STATUSES: readonly CapturePointStatus[] = [
 export interface EstablishmentCapturePoint {
   id: string;
   establishmentId: string;
-  /** Nulo ate o importador reconciliar o valor de `Captacao` com `captureMethods`. */
+  /** Nulo ate o importador reconciliar o valor de `Terminal` com `captureMethods`. */
   captureMethodId: string | null;
-  terminalNumber: string;
+  /**
+   * NULO em toda a base atual. A coluna `Terminal` da planilha traz nome de
+   * adquirente e gateway separados por `/` — zero dos 1.804 valores contem
+   * digito. Fica para quando houver origem que traga o numero de fato.
+   */
+  terminalNumber: string | null;
   status: CapturePointStatus;
-  /** No maximo um por estabelecimento, por indice unico parcial. */
-  isPrimary: boolean;
+  /**
+   * No maximo um por estabelecimento, por indice unico parcial — e nulo nao e
+   * primario, entao varios nulos convivem.
+   *
+   * Nulo em toda a base atual: deduzir o principal pela ordem em que os meios
+   * aparecem numa string seria dado fabricado.
+   */
+  isPrimary: boolean | null;
   createdAt: string;
   updatedAt: string;
 }
 
 /**
- * Meio de captura. A tabela nasce vazia: quem popula e o importador, a partir dos
- * valores distintos da coluna `Captacao`. `sourceName` guarda o valor cru e e a
- * chave de reconciliacao na proxima importacao, mesma disciplina de `segments`.
+ * Meio de captura de transacao — adquirente ou gateway.
+ *
+ * A tabela nasce vazia: quem popula e o importador, a partir da coluna
+ * `Terminal`, separando por `/`. Treze meios na base real, sendo Software
+ * Express Sitef, Resomaq, Software Express CARD SE e CIELO os mais frequentes.
+ *
+ * `sourceName` guarda o valor cru e e a chave de reconciliacao na proxima
+ * importacao, mesma disciplina de `segments`.
  */
 export interface CaptureMethod {
   id: string;
