@@ -20,7 +20,7 @@
 -- onde alguem tenha importado.
 
 begin;
-select plan(18);
+select plan(20);
 
 insert into auth.users (id, instance_id, aud, role, email, raw_user_meta_data)
 values ('eeeeeeee-0000-4000-8000-00000000000c',
@@ -37,6 +37,45 @@ select throws_ok(
   'P0001', null,
   'commit sem usuario identificado e recusado'
 );
+
+-- ===========================================================================
+-- A FRONTEIRA DE PAPEL
+-- ===========================================================================
+-- `import_commit` e `security definer`: a RLS de establishments, segments e
+-- capture_methods NAO e avaliada la dentro. Sem checagem na entrada, o
+-- `grant execute to authenticated` vira o unico controle — e ele so pergunta
+-- "esta logado?". Verificado antes da correcao: um consultor criou
+-- estabelecimento por esta funcao.
+insert into auth.users (id, instance_id, aud, role, email, raw_user_meta_data)
+values ('eeeeeeee-0000-4000-8000-00000000000d',
+        '00000000-0000-0000-0000-000000000000',
+        'authenticated', 'authenticated', 'consultor@pgtap.invalid',
+        '{"full_name":"Consultor de Campo"}'::jsonb);
+
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"eeeeeeee-0000-4000-8000-00000000000d","user_role":"consultor_campo"}',
+  true
+);
+
+select is(public.is_admin(), false, 'consultor_campo nao tem importacao.executar');
+
+select throws_ok(
+  $$ select public.import_commit('11111111-0000-4000-8000-000000000001') $$,
+  '42501',
+  null,
+  'consultor de campo NAO aplica importacao, mesmo com a funcao sendo definer'
+);
+
+-- NAO ha assercao de "o job nao ficou preso em `aplicando`". Ela foi escrita,
+-- testada e removida: nao ha como ela falhar. A excecao reverte a transacao que
+-- a levantou, entao a transicao para `aplicando` volta junto — qualquer que seja
+-- a ordem das linhas na funcao. Tentar produzir o estado preso, movendo a guarda
+-- para depois do update, so mostrou o job em `concluida` (guarda ausente) ou em
+-- `previa` (guarda presente); nunca em `aplicando`.
+--
+-- Assercao que nao pode falhar nao cobre nada, e ainda cobra o preco de parecer
+-- que cobre. A garantia real esta na anterior: a funcao LEVANTA.
 
 select set_config(
   'request.jwt.claims',
