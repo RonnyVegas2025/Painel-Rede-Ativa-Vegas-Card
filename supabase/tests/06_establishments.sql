@@ -7,7 +7,7 @@
 -- parciais desta sprint.
 
 begin;
-select plan(18);
+select plan(19);
 
 -- Fixtures locais. O rollback no fim descarta tudo.
 insert into public.establishments (id, external_contract, cnpj, legal_name, trade_name)
@@ -196,12 +196,27 @@ select is(
 -- Escrita da linha crua e das exclusoes
 -- ===========================================================================
 
+-- A assercao era `INSERT, UPDATE e DELETE = 0`, e tornava a previa impossivel de
+-- construir sem `service_role` — que ignora a RLS por completo. Ausencia de policy
+-- nao era restricao ali: era um convite, porque a tarefa precisa ser feita de
+-- algum jeito e so sobrava o jeito que contorna a fronteira.
+--
+-- Refinada, nao afrouxada. "Evidencia" quer dizer IMUTAVEL DEPOIS DE ESCRITA, o
+-- que e sobre UPDATE e DELETE. A previa escreve a linha uma vez, com o cliente do
+-- usuario e a RLS ligada; ninguem edita nem apaga depois — nem administrador.
 select is(
   (select count(*)::int from pg_policies
    where schemaname = 'public' and tablename = 'import_rows'
-     and cmd in ('INSERT','UPDATE','DELETE')),
+     and cmd in ('UPDATE','DELETE')),
   0,
-  'import_rows nao tem policy de escrita: a linha crua e evidencia, nao dado editavel'
+  'import_rows nao aceita UPDATE nem DELETE: a linha crua e imutavel depois de escrita'
+);
+
+select is(
+  (select array_agg(policyname::text order by policyname) from pg_policies
+   where schemaname = 'public' and tablename = 'import_rows' and cmd = 'INSERT'),
+  array['gestao cria linhas da importacao']::text[],
+  'a unica escrita em import_rows e a da previa, e ela passa pela RLS'
 );
 
 select is(

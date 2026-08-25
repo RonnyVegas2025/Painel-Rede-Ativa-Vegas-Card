@@ -184,6 +184,40 @@ Três consequências práticas:
    O mesmo vale para comparar conjuntos que mudaram de tamanho entre as duas medições — a
    diferença vem da população, não da escrita.
 
+### Verificação impossível de falhar também não é verificação
+
+O outro lado da regra acima. Uma verificação pode não depender de etapa nenhuma e ainda
+assim não verificar — porque não existe estado do mundo em que ela fique vermelha.
+
+O teste de dentes é o que distingue as duas: **remova a proteção e confirme que o teste
+falha.** Se não falhar, ou a asserção é vácua, ou ela verifica outra coisa.
+
+Dois casos reais, os dois descobertos injetando o defeito e nenhum descobrível lendo:
+
+- Uma asserção de que a RPC recusada não deixava o job preso em estado transitório. Não há
+  como ela falhar: a exceção reverte a transação que a levantou, então a transição volta
+  junto, qualquer que seja a ordem das linhas na função. Foi removida — asserção que não
+  pode falhar não cobre nada e ainda cobra o preço de parecer que cobre.
+- Uma varredura que procurava a chamada `is_admin` no corpo da função. `pg_get_functiondef`
+  devolve o corpo **com os comentários**, e o bloco que explicava por que a checagem estava
+  ali bastava para o casamento. A asserção passava com a checagem desativada: respondia
+  "alguém escreveu `is_admin` em algum lugar", não "a função chama `is_admin`".
+
+Quando a remoção da proteção não é encenável, a asserção precisa ser reescrita até que
+seja. Corolário: **a injeção fica registrada** — no comentário da asserção ou na mensagem
+de commit —, senão a próxima pessoa a mexer não sabe o que ela cobre.
+
+### Varredura vence correção pontual
+
+Quando um defeito é encontrado varrendo o schema em vez de lendo código, **a varredura é o
+entregável, não a correção.** A instância corrigida era a única naquele dia; a próxima
+nasce igual, e ninguém vai lembrar de varrer de novo.
+
+Toda categoria de superfície privilegiada tem inventário declarado em teste: tabela sem
+RLS, `TRUNCATE` concedido, view sem `security_invoker`, função `SECURITY DEFINER`
+executável por `authenticated`. Item novo fora da lista quebra a suíte, e quem o adiciona
+declara por escrito por que é seguro. Não há terceira opção, e é de propósito.
+
 ### Teste vermelho por motivo rotineiro é teste que ninguém lê
 
 Corolário do anterior, e o mais fácil de deixar passar: uma asserção pode estar correta e

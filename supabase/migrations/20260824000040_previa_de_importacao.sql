@@ -1,0 +1,19 @@
+-- 0040 O estado `processando` e a RLS de volta ao caminho da previa
+--
+-- ===========================================================================
+-- 1. `processando`: o estado que impede a previa parcial de parecer completa
+-- ===========================================================================
+-- 1.804 insercoes a partir do Node nao sao uma transacao. Queda de rede na linha
+-- 900 deixa o job com metade das linhas.
+--
+-- O perigo nao e a falha — e o job parcial PARECER completo. A previa mostraria
+-- contagens plausiveis, e o commit aplicaria 900 de 1.804 sem ninguem notar.
+--
+-- O job nasce em `processando` e so vira `previa` quando a contagem gravada bate
+-- com o total que o parser leu. `import_commit` exige `previa`, entao um job
+-- interrompido nao e aplicavel — e aparece na lista como interrompido, para
+-- descarte.
+--
+-- O `alter type` vem antes de tudo e fora da transacao das policies: um valor de
+-- enum so pode ser USADO depois de commitado.
+alter type public.import_job_status add value if not exists 'processando' before 'previa';

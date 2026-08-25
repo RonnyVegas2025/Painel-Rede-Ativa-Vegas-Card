@@ -23,7 +23,7 @@
 -- exige is_admin(). Enfraquecer esta varredura reabre aquilo. Ver ADR 0012.
 
 begin;
-select plan(11);
+select plan(13);
 
 -- 1. TRUNCATE ignora RLS -------------------------------------------------------
 -- Um usuario logado com TRUNCATE esvazia audit_logs sem passar por policy
@@ -228,6 +228,81 @@ select is(
    where n.nspname = 'public' and c.relkind = 'p' and not c.relrowsecurity),
   0,
   'toda tabela particionada de public tem RLS habilitada no pai'
+);
+
+-- 12 e 13. INVENTARIO DAS FUNCOES `SECURITY DEFINER` --------------------------
+--
+-- POR QUE ISTO EXISTE
+--
+-- `import_commit` verificava apenas "esta logado?" e era `security definer`: a
+-- RLS nao e avaliada dentro dela, entao o `grant execute to authenticated` era o
+-- unico controle real. Um `consultor_campo` aplicava uma importacao inteira.
+--
+-- O `is_admin()` que corrigiu aquela funcao NAO e a correcao duravel. A varredura
+-- e. `import_commit` era a unica com o furo naquele dia; a proxima funcao definer
+-- com execute para `authenticated` nasce com o mesmo, e ninguem vai lembrar de
+-- varrer de novo. Foi exatamente assim com o GRANT das tabelas e com a view sem
+-- `security_invoker`.
+--
+-- Mesma forma da amarracao de tipos ao schema e da guarda de navegacao: a
+-- verificacao falha quando alguem INTRODUZ o problema, nao quando alguem lembra
+-- de procurar.
+--
+-- COMO MANTER
+--
+-- Funcao definer nova quebra a assercao 12. Quem a adicionar escolhe uma lista e
+-- escreve o motivo. Nao ha terceira opcao, e e de proposito.
+
+-- 12. Nenhuma funcao definer fora das duas listas revisadas.
+select set_eq(
+  $$ select p.oid::regprocedure::text
+       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public' and p.prosecdef
+        and has_function_privilege('authenticated', p.oid, 'execute') $$,
+  $$ values
+       -- ESCREVEM NO DOMINIO — exigem papel na entrada.
+       ('import_commit(uuid)'),
+
+       -- NAO exigem papel, e o motivo de cada uma:
+       -- devolvem o papel/equipe/IP DO PROPRIO chamador; nao ha o que escalar.
+       ('auth_role()'),
+       ('auth_team_id()'),
+       ('request_ip()'),
+       -- sao a propria checagem de papel; exigir papel para checar papel e ciclo.
+       ('is_admin()'),
+       ('has_role(user_role[])'),
+       -- funcoes de trigger: retornam `trigger`, e o Postgres recusa chamada
+       -- direta. O grant e heranca do padrao do schema, nao superficie.
+       ('fn_block_alias_with_rules()'),
+       ('fn_protect_profile_fields()')
+  $$,
+  'toda funcao SECURITY DEFINER executavel por authenticated esta na lista revisada'
+);
+
+-- 13. As que escrevem no dominio checam papel de fato.
+--
+-- Assercao grosseira de proposito: procura a chamada no corpo. Nao prova que a
+-- checagem esta no lugar certo — prova que ela existe, e teria pego o furo do
+-- import_commit no dia em que ele nasceu.
+--
+-- OS COMENTARIOS SAO REMOVIDOS ANTES DE PROCURAR, e isso nao e detalhe.
+--
+-- `pg_get_functiondef` devolve o corpo COM os comentarios. A primeira versao
+-- desta assercao passou com a checagem desativada, porque o bloco de comentario
+-- dentro de import_commit explica por que `is_admin()` esta ali — e a palavra
+-- bastava para o casamento. A verificacao respondia "alguem escreveu is_admin
+-- em algum lugar", nao "a funcao chama is_admin".
+--
+-- Descoberto injetando o defeito, que e a unica forma de descobrir isto.
+select is(
+  (select array_agg(p.oid::regprocedure::text order by p.oid::regprocedure::text)
+     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.prosecdef
+      and p.oid::regprocedure::text in ('import_commit(uuid)')
+      and regexp_replace(pg_get_functiondef(p.oid), '--[^\n]*', '', 'g')
+          !~ 'public\.(is_admin|has_role)\s*\('),
+  null,
+  'funcao definer que escreve no dominio chama is_admin() ou has_role() no codigo'
 );
 
 select * from finish();
