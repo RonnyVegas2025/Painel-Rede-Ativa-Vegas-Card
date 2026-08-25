@@ -15,7 +15,7 @@
 --    e nova; tratar `status` como resposta de identidade a perdia em silencio.
 
 begin;
-select plan(13);
+select plan(18);
 
 insert into auth.users (id, instance_id, aud, role, email, raw_user_meta_data)
 values ('eeeeeeee-0000-4000-8000-00000000000c',
@@ -178,6 +178,112 @@ update public.import_jobs
 select is(
   (select missing_count from public.import_commit('11111111-0000-4000-8000-000000000003')),
   1, 'com confirmacao explicita a importacao aplica e marca o ausente'
+);
+
+
+-- ===========================================================================
+-- REAPARECER DESMARCA — para qualquer status
+-- ===========================================================================
+-- O aceite do E-005 declarou "segunda passada, zero ausentes" e nunca exercitou
+-- este caso: a base nao tinha ninguem marcado para reaparecer. A verificacao
+-- estava incompleta, nao so o codigo.
+--
+-- `atualizado` responde "o dado mudou?". Desmarcar depende de "apareceu no
+-- arquivo?". Enquanto a limpeza morou dentro daquele ramo, o caso MAIS COMUM —
+-- a linha volta identica — mantinha a marca para sempre.
+
+insert into public.import_jobs (id, file_name, storage_path, scope_city, total_rows)
+values ('11111111-0000-4000-8000-000000000004', 'ant.xlsx', 'p/ant.xlsx', 'São Paulo', 0);
+
+insert into public.establishments (id, external_contract, legal_name, trade_name,
+                                   absent_since, absent_from_import, updated_at)
+values
+  ('44444444-0000-4000-8000-00000000000a', 'C-10', 'Volta Igual Ltda', 'Volta Igual',
+   now() - interval '90 days', '11111111-0000-4000-8000-000000000004', '2020-01-01'),
+  ('44444444-0000-4000-8000-00000000000b', 'C-11', 'Volta Mudada Ltda', 'Volta Mudada',
+   now() - interval '90 days', '11111111-0000-4000-8000-000000000004', '2020-01-01');
+
+insert into public.establishment_addresses
+  (establishment_id, street, street_name, street_number, district, cep, city, state, is_current)
+values
+  ('44444444-0000-4000-8000-00000000000a', 'Rua Dez - N.º: 10 - Centro',  'Rua Dez',  '10', 'Centro', '01010000', 'São Paulo', 'SP', true),
+  ('44444444-0000-4000-8000-00000000000b', 'Rua Onze - N.º: 11 - Centro', 'Rua Onze', '11', 'Centro', '01011000', 'São Paulo', 'SP', true);
+
+-- `updated_at` no passado de proposito.
+--
+-- Duas armadilhas aqui, e as duas fazem a assercao passar sem verificar nada:
+--
+-- 1. Dentro de uma transacao pgTAP `now()` e constante. Comparar now() com now()
+--    passa mesmo se o gatilho tiver disparado. Por isso uma data DISTINTA.
+-- 2. `establishments_touch` e BEFORE UPDATE: ele sobrescreve o proprio seed.
+--    Semear com UPDATE sem desliga-lo grava now(), nao 2020 — e ai a assercao
+--    compara duas datas iguais por outro motivo. Desligado so para semear.
+--
+-- C-1 nunca foi marcado como ausente: esteve em todas as importacoes ate aqui.
+-- (C-2 foi marcado pelo job 3 e vai reaparecer agora, entao o updated_at DELE
+-- muda com razao — nao serve de sujeito para esta assercao.)
+alter table public.establishments disable trigger establishments_touch;
+update public.establishments set updated_at = '2020-01-01'
+ where external_contract = 'C-1';
+alter table public.establishments enable trigger establishments_touch;
+
+insert into public.import_jobs (id, file_name, storage_path, scope_city, total_rows)
+values ('11111111-0000-4000-8000-000000000005', 'volta.xlsx', 'p/volta.xlsx', 'São Paulo', 4);
+
+-- Os dois que voltam, um sem mudar e outro mudando; e os dois que ja estavam la,
+-- para a importacao nao parecer um recorte e disparar a trava.
+insert into public.import_rows (import_id, line_number, status, raw_data, establishment_id)
+values
+  ('11111111-0000-4000-8000-000000000005', 2, 'inalterado',
+   jsonb_build_object('capture_methods', '[]'::jsonb), '44444444-0000-4000-8000-00000000000a'),
+  ('11111111-0000-4000-8000-000000000005', 3, 'atualizado',
+   jsonb_build_object('capture_methods', '[]'::jsonb,
+                      'legal_name', 'Volta Mudada Ltda', 'trade_name', 'Volta Mudada Agora',
+                      'city', 'São Paulo', 'state', 'SP',
+                      'endereco_bruto', 'Rua Onze - N.º: 11 - Centro',
+                      'street_name', 'Rua Onze', 'street_number', '11',
+                      'district', 'Centro', 'cep', '01011000'),
+   '44444444-0000-4000-8000-00000000000b');
+
+insert into public.import_rows (import_id, line_number, status, raw_data, establishment_id)
+select '11111111-0000-4000-8000-000000000005', 4, 'inalterado',
+       jsonb_build_object('capture_methods', '[]'::jsonb), id
+  from public.establishments where external_contract = 'C-1';
+insert into public.import_rows (import_id, line_number, status, raw_data, establishment_id)
+select '11111111-0000-4000-8000-000000000005', 5, 'inalterado',
+       jsonb_build_object('capture_methods', '[]'::jsonb), id
+  from public.establishments where external_contract = 'C-2';
+
+select lives_ok(
+  $$ select public.import_commit('11111111-0000-4000-8000-000000000005') $$,
+  'a importacao com os reaparecidos aplica'
+);
+
+select is(
+  (select absent_since from public.establishments where id = '44444444-0000-4000-8000-00000000000a'),
+  null,
+  'reapareceu INALTERADO e a marca de ausencia saiu — o caso mais comum, que falhava'
+);
+
+select is(
+  (select absent_from_import from public.establishments where id = '44444444-0000-4000-8000-00000000000a'),
+  null,
+  'a referencia a importacao que marcou tambem saiu'
+);
+
+select is(
+  (select absent_since from public.establishments where id = '44444444-0000-4000-8000-00000000000b'),
+  null,
+  'reapareceu ATUALIZADO e a marca saiu: a limpeza vale para qualquer status'
+);
+
+-- Quem nunca esteve marcado nao pode ser tocado. Sem `absent_since is not null`
+-- no update, o gatilho de updated_at dispararia em toda a base e a impressao
+-- digital que prova a idempotencia mudaria sem nenhum dado ter mudado.
+select is(
+  (select updated_at from public.establishments where external_contract = 'C-1'),
+  '2020-01-01'::timestamptz,
+  'quem nunca esteve marcado ficou com updated_at intocado'
 );
 
 select * from finish();

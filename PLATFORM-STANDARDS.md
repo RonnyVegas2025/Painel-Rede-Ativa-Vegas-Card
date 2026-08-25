@@ -155,6 +155,35 @@ assumido, ou não está verificando nada.
 Toda linha de matriz de permissão tem teste correspondente que assume o papel e verifica
 que a operação proibida falha.
 
+### Verificação que depende de outra etapa ter feito a coisa certa não é verificação
+
+A Sprint 1 do Painel Rede Ativa produziu quatro ocorrências da mesma forma, e as quatro
+passaram despercebidas por um teste verde:
+
+| Ocorrência | O que a verificação realmente respondia |
+|---|---|
+| Policy de RLS sem `GRANT` de tabela | "ninguém consegue escrever" — não "a política recusa" |
+| View sem `security_invoker` | "o dono pode ler" — não "o papel pode ler" |
+| Trava de ausentes lendo `requires_confirmation` | "a prévia calculou o campo" — não "o volume é aceitável" |
+| Limpeza de ausência dentro do ramo `atualizado` | "o dado mudou" — não "o registro reapareceu" |
+
+O padrão é sempre o mesmo: uma pergunta é usada no lugar de outra, e o teste passa por
+**ausência** — de privilégio, de dado, de caminho percorrido. Recusa por indisponibilidade
+se parece com recusa por política; contagem que não aconteceu se parece com contagem zero.
+
+Três consequências práticas:
+
+1. **A trava recalcula.** Verificação não lê um campo que outra etapa gravou. Se o commit
+   precisa saber quantos registros somem, ele conta — não pergunta à prévia.
+2. **Toda trava nova nasce com a injeção do defeito registrada.** Escrever o teste não
+   basta: remove-se a proteção, confirma-se que o teste fica vermelho, e a injeção fica
+   descrita no comentário ou na mensagem de commit. Teste que nunca falhou não é evidência
+   de nada.
+3. **Asserção sobre o que *não* mudou precisa de valor distinto.** Dentro de uma transação,
+   `now()` é constante e comparar `now()` com `now()` passa mesmo com o gatilho disparando.
+   O mesmo vale para comparar conjuntos que mudaram de tamanho entre as duas medições — a
+   diferença vem da população, não da escrita.
+
 ---
 
 ## 9. Documentação
