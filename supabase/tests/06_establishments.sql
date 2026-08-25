@@ -7,7 +7,7 @@
 -- parciais desta sprint.
 
 begin;
-select plan(19);
+select plan(20);
 
 -- Fixtures locais. O rollback no fim descarta tudo.
 insert into public.establishments (id, external_contract, cnpj, legal_name, trade_name)
@@ -217,6 +217,19 @@ select is(
    where schemaname = 'public' and tablename = 'import_rows' and cmd = 'INSERT'),
   array['gestao cria linhas da propria previa em montagem']::text[],
   'a unica escrita em import_rows e a da previa, e ela passa pela RLS'
+);
+
+-- A ausencia de policy de UPDATE deixou de ser a verdade INTEIRA quando o commit
+-- passou a preencher `establishment_id`: ele e `security definer` e ignora a RLS.
+-- Sem o trigger, a imutabilidade da evidencia dependeria de a proxima versao do
+-- commit continuar se comportando.
+select is(
+  (select count(*)::int from pg_trigger
+    where tgrelid = 'public.import_rows'::regclass
+      and not tgisinternal
+      and tgname = 'import_rows_imutavel'),
+  1,
+  'a imutabilidade de import_rows e estrutural: trigger, nao ausencia de policy'
 );
 
 select is(

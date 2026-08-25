@@ -17,7 +17,7 @@
 --    motivo e o que corroi a trava.
 
 begin;
-select plan(12);
+select plan(21);
 
 insert into auth.users (id, instance_id, aud, role, email, raw_user_meta_data)
 values ('bbbb2222-0000-4000-8000-000000000001', '00000000-0000-0000-0000-000000000000',
@@ -58,6 +58,14 @@ select (select id from t), row_number() over (order by e.external_contract) + 1,
   from public.establishments e
  where e.external_contract = 'TESTE-R-1'
     or e.external_contract like 'TESTE-R-1_';
+
+-- Finalizada: a redeclaracao acontece a partir de uma previa REVISADA, que e o
+-- cenario real. Sete linhas, numeradas de 2 a 8.
+select is(
+  (select status::text from public.import_finalize_preview((select id from t), 7)),
+  'previa',
+  'a previa fecha com as sete linhas conferidas'
+);
 
 -- ===========================================================================
 -- O resumo que a tela le
@@ -126,24 +134,101 @@ select throws_ok(
   'redeclarar para o MESMO escopo e recusado: daria o mesmo resultado'
 );
 
+-- ===========================================================================
+-- Redeclarar em DOIS TEMPOS: o original so cai quando a copia deu certo
+-- ===========================================================================
 create temporary table t2 as
 select * from public.import_redeclare_scope((select id from t), 'TESTE Outra Cidade', 'era so a zona sul');
 
 select is(
   (select status::text from public.import_jobs where id = (select id from t)),
-  'cancelada',
-  'a previa errada foi descartada na mesma acao'
+  'previa',
+  'PRIMEIRO TEMPO: a original NAO foi tocada — a copia do arquivo ainda nao aconteceu'
 );
 
 select is(
   (select derivado_de_id from t2), (select id from t),
-  'a nova importacao aponta para a descartada: a historia fica legivel em marco'
+  'a nova importacao aponta para a original: a historia fica legivel em marco'
+);
+
+select throws_ok(
+  format($$ select public.import_redeclare_scope(%L, 'TESTE Terceira Cidade') $$, (select id from t)),
+  'P0001', null,
+  'redeclarar duas vezes a mesma previa e recusado: abre a derivada em vez de criar outra'
+);
+
+-- CAMINHO DE FALHA: a copia do arquivo nao deu certo. O Node descarta a derivada,
+-- e a original continua inteira — o operador nao fica sem nenhum dos dois com os
+-- 20 MB ja enviados.
+create temporary table t_falha as
+select * from public.import_discard((select id from t2), 'copia do arquivo falhou');
+
+select is(
+  (select status::text from public.import_jobs where id = (select id from t)),
+  'previa',
+  'copia falhou: a ORIGINAL continua aplicavel, e nada se perdeu'
+);
+
+-- CAMINHO FELIZ, num par novo.
+create temporary table t3 as
+select * from public.import_create_preview('outra.xlsx', 'TESTE Cidade');
+create temporary table t4 as
+select * from public.import_redeclare_scope((select id from t3), 'TESTE Quarta Cidade');
+
+select is(
+  (select status::text from public.import_finish_redeclaration((select id from t4))),
+  'processando',
+  'SEGUNDO TEMPO devolve a derivada, que segue em montagem'
 );
 
 select is(
-  (select error_message from public.import_jobs where id = (select id from t)),
-  'descartada: escopo redeclarado para TESTE Outra Cidade — era so a zona sul',
+  (select status::text from public.import_jobs where id = (select id from t3)),
+  'cancelada',
+  'so agora a original e descartada'
+);
+
+select is(
+  (select error_message from public.import_jobs where id = (select id from t3)),
+  'descartada: escopo redeclarado para TESTE Quarta Cidade',
   'o motivo e gravado pelo CONTEXTO: cobrar texto livre poria atrito no caminho certo'
+);
+
+-- Idempotente: a copia pode ter dado certo e a chamada seguinte ter caido.
+select lives_ok(
+  format($$ select public.import_finish_redeclaration(%L) $$, (select id from t4)),
+  'concluir a redeclaracao duas vezes nao levanta erro'
+);
+
+-- ===========================================================================
+-- A evidencia e imutavel por TRIGGER, nao por ausencia de policy
+-- ===========================================================================
+insert into public.import_rows (import_id, line_number, status, raw_data)
+values ((select id from t4), 2, 'novo', '{"capture_methods":[],"legal_name":"X"}'::jsonb);
+
+-- Como superusuario, para provar que o trigger vale contra quem ignora a RLS —
+-- que e a situacao de `import_commit`, `security definer`.
+reset role;
+
+select throws_ok(
+  format($$ update public.import_rows set raw_data = '{"legal_name":"OUTRO"}'::jsonb
+             where import_id = %L $$, (select id from t4)),
+  '23514', null,
+  'reescrever a linha crua e recusado mesmo por quem passa por cima da RLS'
+);
+
+select lives_ok(
+  format($$ update public.import_rows set establishment_id = %L
+             where import_id = %L $$,
+         'cccc3333-0000-4000-8000-00000000000a', (select id from t4)),
+  'o elo de resultado e gravavel: de nulo para valor'
+);
+
+select throws_ok(
+  format($$ update public.import_rows set establishment_id = %L
+             where import_id = %L $$,
+         'cccc3333-0000-4000-8000-00000000000b', (select id from t4)),
+  '23514', null,
+  'e gravavel UMA VEZ: reapontar reescreveria o que aquela importacao produziu'
 );
 
 select * from finish();
