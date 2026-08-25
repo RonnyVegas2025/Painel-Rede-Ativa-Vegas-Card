@@ -20,7 +20,7 @@
 -- onde alguem tenha importado.
 
 begin;
-select plan(20);
+select plan(22);
 
 insert into auth.users (id, instance_id, aud, role, email, raw_user_meta_data)
 values ('eeeeeeee-0000-4000-8000-00000000000c',
@@ -123,6 +123,27 @@ select lives_ok(
 select is(
   (select created_count from public.import_jobs where id = '11111111-0000-4000-8000-000000000001'),
   1, 'um estabelecimento criado'
+);
+
+-- O ELO: linha `novo` nasce sem establishment_id porque o estabelecimento ainda
+-- nao existia. O commit preenche depois de criar.
+--
+-- Sem isto, "veio nesta importacao?" nao e pergunta que import_rows responda — e
+-- a definicao unica de ausente marcaria como sumido todo estabelecimento que a
+-- propria importacao acabou de criar.
+select is(
+  (select count(*)::integer from public.import_rows
+    where import_id = '11111111-0000-4000-8000-000000000001'
+      and establishment_id is null),
+  0,
+  'depois do commit, a linha aponta para o estabelecimento que ela criou'
+);
+
+-- A definicao e UMA: o que a tela leu e o que o commit marcou.
+select is(
+  (select (public.import_absent_summary('11111111-0000-4000-8000-000000000001') ->> 'ausentes')::integer),
+  (select missing_count from public.import_jobs where id = '11111111-0000-4000-8000-000000000001'),
+  'o numero que a tela mostra e o mesmo que o commit marcou'
 );
 
 -- ===========================================================================
