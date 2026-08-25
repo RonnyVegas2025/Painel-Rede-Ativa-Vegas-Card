@@ -184,6 +184,26 @@ Três consequências práticas:
    O mesmo vale para comparar conjuntos que mudaram de tamanho entre as duas medições — a
    diferença vem da população, não da escrita.
 
+### Teste vermelho por motivo rotineiro é teste que ninguém lê
+
+Corolário do anterior, e o mais fácil de deixar passar: uma asserção pode estar correta e
+ainda assim apodrecer, se fica vermelha em situação legítima e frequente.
+
+O caso concreto: `capture_methods` nasce vazia era verdade sobre o **seed**, não invariante
+do schema. Ficava vermelha em todo banco local onde alguém tivesse importado — que é o
+trabalho normal de três etapas seguidas. Substituída pelo invariante que sobrevive à base
+importada: toda linha tem origem rastreável a uma importação.
+
+Duas regras práticas:
+
+- **Fixture de teste não pode colidir com dado real.** Nomes com prefixo reservado
+  (`TESTE `), e-mails no TLD `.invalid`, e escopo próprio — uma cidade de fixture, não a
+  cidade que a operação usa. Fixture que colide aborta o arquivo inteiro antes da primeira
+  asserção, e o erro que aparece não tem nada a ver com o que se estava testando.
+- **Asserção conta as próprias fixtures, não a tabela inteira.** `count(*) from tabela = 1`
+  amarra o teste ao estado do banco; `count(*) ... where <marca da fixture> = 1` verifica o
+  mesmo fato e sobrevive a qualquer base.
+
 ---
 
 ## 9. Documentação

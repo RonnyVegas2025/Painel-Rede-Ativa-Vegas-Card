@@ -158,17 +158,38 @@ select lives_ok(
 );
 
 -- ===========================================================================
--- capture_methods nasce vazia
+-- capture_methods so contem o que veio de uma importacao
 -- ===========================================================================
 -- Semear com nomes escolhidos a mao criaria o mesmo defeito de reconciliacao que
 -- source_name existe para evitar. E a origem nao e `Captacao`, como se supunha:
 -- aquela coluna diz como o comercio foi CREDENCIADO — Pessoalmente, E-Mail,
 -- Telefone — e virou establishments.acquisition_channel. Os meios vem de
 -- `Terminal`, separados por `/`.
+--
+-- A assercao era `count(*) = 0`, e estava errada de forma — nao de conteudo.
+--
+-- "Nasce vazia" e um fato sobre o SEED, nao um invariante do schema: ela fica
+-- vermelha em todo banco local onde alguem importou, que e exatamente o que se
+-- faz trabalhando no E-006, E-007 e E-008. Teste que fica vermelho por motivo
+-- legitimo e rotineiro e teste que as pessoas aprendem a ignorar — e quando ele
+-- ficar vermelho pelo motivo certo, ninguem vai olhar.
+--
+-- O invariante que sobrevive a base importada e mais forte: toda linha tem
+-- origem RASTREAVEL numa importacao. Base recem-instalada tem zero linhas e
+-- passa; base importada tem 13 e passa; migration ou seed que inventar um nome
+-- produz linha sem origem e falha nos dois estados.
 select is(
-  (select count(*)::int from public.capture_methods),
+  (select count(*)::int from public.capture_methods cm
+    where not exists (
+      select 1
+        from public.import_rows r
+        cross join lateral jsonb_array_elements_text(
+          coalesce(r.raw_data -> 'capture_methods', '[]'::jsonb)
+        ) as m(valor)
+       where m.valor = cm.source_name
+    )),
   0,
-  'capture_methods nasce vazia: quem popula e o importador, pelo valor cru de Terminal'
+  'capture_methods so contem meios rastreaveis a uma importacao: ninguem semeia a mao'
 );
 
 -- ===========================================================================
