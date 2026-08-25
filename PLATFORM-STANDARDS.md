@@ -207,6 +207,27 @@ Quando a remoção da proteção não é encenável, a asserção precisa ser re
 seja. Corolário: **a injeção fica registrada** — no comentário da asserção ou na mensagem
 de commit —, senão a próxima pessoa a mexer não sabe o que ela cobre.
 
+### Proibição sem caminho legítimo produz contorno, não obediência
+
+Antes das regras de teste, uma de desenho — porque ela evita o defeito em vez de detectá-lo.
+
+`import_rows` tinha policy de leitura e **nenhuma de escrita**. Parecia a posição mais
+segura possível. Era o contrário: a importação precisa gravar aquelas linhas de algum jeito,
+e o único jeito que restava era o cliente `service_role`, que ignora a RLS inteira. A
+ausência de policy não restringia nada — encaminhava o trabalho para fora da fronteira.
+
+Ao fechar um caminho, verifique se o trabalho que ele servia ainda tem uma porta:
+
+- **Existe caminho legítimo para a tarefa real?** Se a única saída é o mecanismo que
+  contorna a segurança, a proibição está produzindo o contorno.
+- **A porta legítima é a mais fácil?** Se contornar dá menos trabalho, alguém vai contornar
+  — sob prazo, e com boa intenção.
+- **A restrição está no lugar certo?** "Evidência é imutável" é sobre `UPDATE` e `DELETE`.
+  Aplicada também ao `INSERT`, proíbe o registro de existir.
+
+O mesmo vale fora de RLS: campo somente-leitura sem fluxo de correção vira correção por SQL
+direto; ambiente bloqueado sem via de exceção vira credencial compartilhada.
+
 ### Varredura vence correção pontual
 
 Quando um defeito é encontrado varrendo o schema em vez de lendo código, **a varredura é o

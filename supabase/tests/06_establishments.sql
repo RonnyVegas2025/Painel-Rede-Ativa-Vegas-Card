@@ -215,7 +215,7 @@ select is(
 select is(
   (select array_agg(policyname::text order by policyname) from pg_policies
    where schemaname = 'public' and tablename = 'import_rows' and cmd = 'INSERT'),
-  array['gestao cria linhas da importacao']::text[],
+  array['gestao cria linhas da propria previa em montagem']::text[],
   'a unica escrita em import_rows e a da previa, e ela passa pela RLS'
 );
 
