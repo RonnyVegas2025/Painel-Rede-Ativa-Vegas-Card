@@ -71,8 +71,26 @@ describe("navegação e páginas construídas", () => {
       "/diagnostico", // ferramenta de instalação, alcançada por link direto
     ]);
 
+    // Sub-rota está coberta quando um ANCESTRAL é item habilitado:
+    // `/importacoes/nova` é alcançável porque `/importacoes` está no menu.
+    //
+    // Regra, não exceção nomeada. Listar cada sub-rota à mão enfraqueceria a
+    // varredura um pouco a cada etapa, que é como toda guarda morre — e a
+    // pergunta que ela responde continua sendo a mesma: esta funcionalidade é
+    // alcançável pela navegação?
+    const cobertaPorAncestral = (rota: string) => {
+      const partes = rota.split("/").filter(Boolean);
+      for (let n = partes.length - 1; n >= 1; n--) {
+        const ancestral = `/${partes.slice(0, n).join("/")}`;
+        const item = naNavegacao.get(ancestral);
+        if (item?.enabled) return true;
+      }
+      return false;
+    };
+
     const orfas = [...paginas].filter((rota) => {
       if (foraDoMenu.has(rota)) return false;
+      if (cobertaPorAncestral(rota)) return false;
       const item = naNavegacao.get(rota);
       // Página que existe e não está na navegação, ou está com enabled false:
       // funcionalidade invisível.

@@ -45,7 +45,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: ROUTES.PRODUTOS, label: "Modalidades", icon: Wallet, permission: "modalidades.editar", enabled: false, mobile: false, group: "cadastros" },
   { href: ROUTES.SEGMENTOS, label: "Segmentos", icon: Tags, permission: "segmentos.editar", enabled: true, mobile: false, group: "cadastros" },
 
-  { href: ROUTES.IMPORTACOES, label: "Importações", icon: FileSpreadsheet, permission: "importacao.executar", enabled: false, mobile: false, group: "administracao" },
+  { href: ROUTES.IMPORTACOES, label: "Importações", icon: FileSpreadsheet, permission: "importacao.executar", enabled: true, mobile: false, group: "administracao" },
   { href: ROUTES.RELATORIOS, label: "Relatórios", icon: BarChart3, permission: "relatorios.comerciais", enabled: false, mobile: false, group: "administracao" },
   { href: ROUTES.USUARIOS, label: "Usuários", icon: Users, permission: "usuarios.gerenciar", enabled: false, mobile: false, group: "administracao" },
   { href: ROUTES.CONFIGURACOES, label: "Configurações", icon: Settings, permission: "configuracoes.editar_operacional", enabled: false, mobile: false, group: "administracao" },

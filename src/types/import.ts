@@ -19,6 +19,14 @@ export type ImportRowStatus =
   /** Presente na base, ausente do arquivo. **Nunca excluido**: vai para analise. */
   | "ausente";
 
+export type ImportJobStatus =
+  | "processando"
+  | "previa"
+  | "aplicando"
+  | "concluida"
+  | "cancelada"
+  | "falhou";
+
 export interface ImportJob {
   id: string;
   fileName: string;
@@ -56,6 +64,34 @@ export interface ImportJob {
   requiresConfirmation: boolean;
   confirmedBy: string | null;
   confirmedAt: string | null;
+
+  /**
+   * Ciclo de vida. O commit exige `previa` e muda para `aplicando` na mesma
+   * transacao: e o que impede que confirmar duas vezes importe duas vezes.
+   *
+   * `processando` e o job em montagem — a previa esta gravando as linhas. Nao e
+   * aplicavel, e existe para que um lote interrompido na linha 900 nao pareca
+   * completo.
+   */
+  status: ImportJobStatus;
+
+  /**
+   * Linhas cujo campo `Terminal` repetia o mesmo meio — `CIELO / CIELO`.
+   * Deduplicado na aplicacao, porque a identidade de um ponto e
+   * `(estabelecimento, meio)`. Contado aqui porque e defeito da ORIGEM, e
+   * silenciar faria o dado errado voltar em toda importacao.
+   */
+  duplicatedCaptureMethods: number;
+  /** Enderecos com `N.o: 0`: o fallback de identidade fica fraco neles. */
+  addressesWithoutNumber: number;
+  /** Motivo do descarte, ou a duracao do commit. */
+  errorMessage: string | null;
+
+  /**
+   * A importacao descartada que originou esta, quando o operador redeclarou o
+   * escopo. Torna a historia legivel: "esta foi redeclarada apos erro de escopo".
+   */
+  derivadoDeId: string | null;
 
   createdAt: string;
   updatedAt: string;

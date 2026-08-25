@@ -194,6 +194,8 @@ export type Database = {
           created_at: string
           establishment_id: string
           id: string
+          inactivated_at: string | null
+          inactivated_by_import: string | null
           is_primary: boolean | null
           status: Database["public"]["Enums"]["capture_point_status"]
           terminal_number: string | null
@@ -204,6 +206,8 @@ export type Database = {
           created_at?: string
           establishment_id: string
           id?: string
+          inactivated_at?: string | null
+          inactivated_by_import?: string | null
           is_primary?: boolean | null
           status?: Database["public"]["Enums"]["capture_point_status"]
           terminal_number?: string | null
@@ -214,6 +218,8 @@ export type Database = {
           created_at?: string
           establishment_id?: string
           id?: string
+          inactivated_at?: string | null
+          inactivated_by_import?: string | null
           is_primary?: boolean | null
           status?: Database["public"]["Enums"]["capture_point_status"]
           terminal_number?: string | null
@@ -234,11 +240,21 @@ export type Database = {
             referencedRelation: "establishments"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "establishment_capture_points_inactivated_by_import_fkey"
+            columns: ["inactivated_by_import"]
+            isOneToOne: false
+            referencedRelation: "import_jobs"
+            referencedColumns: ["id"]
+          },
         ]
       }
       establishments: {
         Row: {
+          absent_from_import: string | null
+          absent_since: string | null
           acquisition_channel: string | null
+          assigned_consultants_raw: string | null
           cnpj: string | null
           created_at: string
           description: string | null
@@ -259,7 +275,10 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          absent_from_import?: string | null
+          absent_since?: string | null
           acquisition_channel?: string | null
+          assigned_consultants_raw?: string | null
           cnpj?: string | null
           created_at?: string
           description?: string | null
@@ -280,7 +299,10 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          absent_from_import?: string | null
+          absent_since?: string | null
           acquisition_channel?: string | null
+          assigned_consultants_raw?: string | null
           cnpj?: string | null
           created_at?: string
           description?: string | null
@@ -302,6 +324,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "establishments_absent_from_import_fkey"
+            columns: ["absent_from_import"]
+            isOneToOne: false
+            referencedRelation: "import_jobs"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "establishments_segment_id_fkey"
             columns: ["segment_id"]
             isOneToOne: false
@@ -319,12 +348,16 @@ export type Database = {
       }
       import_jobs: {
         Row: {
+          addresses_without_number: number
           confirmed_at: string | null
           confirmed_by: string | null
           conflict_count: number
           created_at: string
           created_count: number
+          derivado_de_id: string | null
+          duplicated_capture_methods: number
           error_count: number
+          error_message: string | null
           file_name: string
           finished_at: string | null
           id: string
@@ -333,6 +366,7 @@ export type Database = {
           scope_card_product_id: string | null
           scope_city: string | null
           started_at: string
+          status: Database["public"]["Enums"]["import_job_status"]
           storage_path: string
           total_rows: number
           unchanged_count: number
@@ -341,12 +375,16 @@ export type Database = {
           uploaded_by: string | null
         }
         Insert: {
+          addresses_without_number?: number
           confirmed_at?: string | null
           confirmed_by?: string | null
           conflict_count?: number
           created_at?: string
           created_count?: number
+          derivado_de_id?: string | null
+          duplicated_capture_methods?: number
           error_count?: number
+          error_message?: string | null
           file_name: string
           finished_at?: string | null
           id?: string
@@ -355,6 +393,7 @@ export type Database = {
           scope_card_product_id?: string | null
           scope_city?: string | null
           started_at?: string
+          status?: Database["public"]["Enums"]["import_job_status"]
           storage_path: string
           total_rows?: number
           unchanged_count?: number
@@ -363,12 +402,16 @@ export type Database = {
           uploaded_by?: string | null
         }
         Update: {
+          addresses_without_number?: number
           confirmed_at?: string | null
           confirmed_by?: string | null
           conflict_count?: number
           created_at?: string
           created_count?: number
+          derivado_de_id?: string | null
+          duplicated_capture_methods?: number
           error_count?: number
+          error_message?: string | null
           file_name?: string
           finished_at?: string | null
           id?: string
@@ -377,6 +420,7 @@ export type Database = {
           scope_card_product_id?: string | null
           scope_city?: string | null
           started_at?: string
+          status?: Database["public"]["Enums"]["import_job_status"]
           storage_path?: string
           total_rows?: number
           unchanged_count?: number
@@ -390,6 +434,13 @@ export type Database = {
             columns: ["confirmed_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "import_jobs_derivado_de_id_fkey"
+            columns: ["derivado_de_id"]
+            isOneToOne: false
+            referencedRelation: "import_jobs"
             referencedColumns: ["id"]
           },
           {
@@ -738,6 +789,14 @@ export type Database = {
       }
     }
     Functions: {
+      address_hash_input: {
+        Args: {
+          p_district: string
+          p_street_name: string
+          p_street_number: string
+        }
+        Returns: string
+      }
       apply_segment_rules: {
         Args: { p_allow: string[]; p_deny: string[]; p_segment_id: string }
         Returns: undefined
@@ -775,6 +834,243 @@ export type Database = {
       has_role: {
         Args: { p_roles: Database["public"]["Enums"]["user_role"][] }
         Returns: boolean
+      }
+      import_absent_establishments: {
+        Args: { p_import_id: string }
+        Returns: string[]
+      }
+      import_absent_summary: { Args: { p_import_id: string }; Returns: Json }
+      import_cities: {
+        Args: { p_import_id: string }
+        Returns: {
+          cidade: string
+          linhas: number
+        }[]
+      }
+      import_commit: {
+        Args: { p_import_id: string }
+        Returns: {
+          addresses_without_number: number
+          confirmed_at: string | null
+          confirmed_by: string | null
+          conflict_count: number
+          created_at: string
+          created_count: number
+          derivado_de_id: string | null
+          duplicated_capture_methods: number
+          error_count: number
+          error_message: string | null
+          file_name: string
+          finished_at: string | null
+          id: string
+          missing_count: number
+          requires_confirmation: boolean
+          scope_card_product_id: string | null
+          scope_city: string | null
+          started_at: string
+          status: Database["public"]["Enums"]["import_job_status"]
+          storage_path: string
+          total_rows: number
+          unchanged_count: number
+          updated_at: string
+          updated_count: number
+          uploaded_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "import_jobs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      import_create_preview: {
+        Args: { p_file_name: string; p_scope_city: string }
+        Returns: {
+          addresses_without_number: number
+          confirmed_at: string | null
+          confirmed_by: string | null
+          conflict_count: number
+          created_at: string
+          created_count: number
+          derivado_de_id: string | null
+          duplicated_capture_methods: number
+          error_count: number
+          error_message: string | null
+          file_name: string
+          finished_at: string | null
+          id: string
+          missing_count: number
+          requires_confirmation: boolean
+          scope_card_product_id: string | null
+          scope_city: string | null
+          started_at: string
+          status: Database["public"]["Enums"]["import_job_status"]
+          storage_path: string
+          total_rows: number
+          unchanged_count: number
+          updated_at: string
+          updated_count: number
+          uploaded_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "import_jobs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      import_discard: {
+        Args: { p_import_id: string; p_motivo: string }
+        Returns: {
+          addresses_without_number: number
+          confirmed_at: string | null
+          confirmed_by: string | null
+          conflict_count: number
+          created_at: string
+          created_count: number
+          derivado_de_id: string | null
+          duplicated_capture_methods: number
+          error_count: number
+          error_message: string | null
+          file_name: string
+          finished_at: string | null
+          id: string
+          missing_count: number
+          requires_confirmation: boolean
+          scope_card_product_id: string | null
+          scope_city: string | null
+          started_at: string
+          status: Database["public"]["Enums"]["import_job_status"]
+          storage_path: string
+          total_rows: number
+          unchanged_count: number
+          updated_at: string
+          updated_count: number
+          uploaded_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "import_jobs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      import_finalize_preview: {
+        Args: {
+          p_duplicados?: number
+          p_import_id: string
+          p_sem_numero?: number
+          p_total_lido: number
+        }
+        Returns: {
+          addresses_without_number: number
+          confirmed_at: string | null
+          confirmed_by: string | null
+          conflict_count: number
+          created_at: string
+          created_count: number
+          derivado_de_id: string | null
+          duplicated_capture_methods: number
+          error_count: number
+          error_message: string | null
+          file_name: string
+          finished_at: string | null
+          id: string
+          missing_count: number
+          requires_confirmation: boolean
+          scope_card_product_id: string | null
+          scope_city: string | null
+          started_at: string
+          status: Database["public"]["Enums"]["import_job_status"]
+          storage_path: string
+          total_rows: number
+          unchanged_count: number
+          updated_at: string
+          updated_count: number
+          uploaded_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "import_jobs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      import_finish_redeclaration: {
+        Args: { p_novo_id: string }
+        Returns: {
+          addresses_without_number: number
+          confirmed_at: string | null
+          confirmed_by: string | null
+          conflict_count: number
+          created_at: string
+          created_count: number
+          derivado_de_id: string | null
+          duplicated_capture_methods: number
+          error_count: number
+          error_message: string | null
+          file_name: string
+          finished_at: string | null
+          id: string
+          missing_count: number
+          requires_confirmation: boolean
+          scope_card_product_id: string | null
+          scope_city: string | null
+          started_at: string
+          status: Database["public"]["Enums"]["import_job_status"]
+          storage_path: string
+          total_rows: number
+          unchanged_count: number
+          updated_at: string
+          updated_count: number
+          uploaded_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "import_jobs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      import_redeclare_scope: {
+        Args: {
+          p_import_id: string
+          p_observacao?: string
+          p_scope_city: string
+        }
+        Returns: {
+          addresses_without_number: number
+          confirmed_at: string | null
+          confirmed_by: string | null
+          conflict_count: number
+          created_at: string
+          created_count: number
+          derivado_de_id: string | null
+          duplicated_capture_methods: number
+          error_count: number
+          error_message: string | null
+          file_name: string
+          finished_at: string | null
+          id: string
+          missing_count: number
+          requires_confirmation: boolean
+          scope_card_product_id: string | null
+          scope_city: string | null
+          started_at: string
+          status: Database["public"]["Enums"]["import_job_status"]
+          storage_path: string
+          total_rows: number
+          unchanged_count: number
+          updated_at: string
+          updated_count: number
+          uploaded_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "import_jobs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       is_admin: { Args: never; Returns: boolean }
       is_segment_eligible: {
@@ -837,6 +1133,13 @@ export type Database = {
         | "substituido"
         | "cancelado"
       eligibility_mode: "all" | "allowlist" | "denylist"
+      import_job_status:
+        | "processando"
+        | "previa"
+        | "aplicando"
+        | "concluida"
+        | "cancelada"
+        | "falhou"
       import_row_status:
         | "novo"
         | "atualizado"
@@ -1570,6 +1873,14 @@ export const Constants = {
         "cancelado",
       ],
       eligibility_mode: ["all", "allowlist", "denylist"],
+      import_job_status: [
+        "processando",
+        "previa",
+        "aplicando",
+        "concluida",
+        "cancelada",
+        "falhou",
+      ],
       import_row_status: [
         "novo",
         "atualizado",

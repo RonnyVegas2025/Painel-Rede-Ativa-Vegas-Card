@@ -44,7 +44,24 @@ export interface Establishment {
    */
   acquisitionChannel: string | null;
   description: string | null;
+  /**
+   * Coluna `Consultores` da planilha, CRUA. Nunca casada com `profiles`.
+   *
+   * Casar nome automaticamente e fonte classica de atribuicao errada, e aqui a
+   * atribuicao decide quem visita o que. O vinculo real e da Sprint 3.
+   */
+  assignedConsultantsRaw: string | null;
   isActive: boolean;
+
+  /**
+   * Desde quando o registro deixou de vir no arquivo, DENTRO do escopo declarado
+   * (ADR 0011). Nunca excluido: vai para analise administrativa. Reaparecer no
+   * arquivo seguinte limpa a marcacao, qualquer que seja o status da linha — a
+   * pergunta e "apareceu?", nao "mudou?".
+   */
+  absentSince: string | null;
+  absentFromImport: string | null;
+
   createdAt: string;
   updatedAt: string;
 }
@@ -139,6 +156,13 @@ export interface EstablishmentCapturePoint {
    * aparecem numa string seria dado fabricado.
    */
   isPrimary: boolean | null;
+  /**
+   * Meio que sumiu do arquivo vai para `inativo` COM DATA, nunca apagado:
+   * comercio que trocou de adquirente e o que a Sprint 7 olha ao abrir
+   * atendimento.
+   */
+  inactivatedAt: string | null;
+  inactivatedByImport: string | null;
   createdAt: string;
   updatedAt: string;
 }

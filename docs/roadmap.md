@@ -34,6 +34,29 @@ Atualizado em 03/08/2026, após o complemento da Central Operacional.
 | 10 | Central de monitoramento | painel de parede, modo ampliado | 9 | — |
 | 11 | Indicadores e refinamento | relatórios, auditoria, ajustes | tudo | — |
 
+## Fronteira E-006 / E-008 — o que NÃO foi construído ainda
+
+Registrado aqui porque daqui a duas etapas ninguém lembra se ficou de fora por
+decisão ou por esquecimento.
+
+**Construído no E-006** (`/importacoes`): lista de **pendentes** — prévias em
+`processando` e `previa` — com aplicar, descartar e redeclarar escopo; a tela de
+nova importação; e `/importacoes/[id]` com os agregados, as cidades do arquivo, a
+tabela paginada por estado e a confirmação deliberada da trava de ausentes.
+
+**Fica para o E-008**, e a Sprint 1 não fecha sem:
+
+| Item | Por quê |
+|---|---|
+| **Resolução de ausentes** | O ADR 0011 manda o registro ausente para análise administrativa. O E-005 marca com data e o E-006 mostra o número — e **não há onde a análise acontece**. Sem ação, a marca nunca sai: a importação seguinte marca de novo, e em três meses ninguém distingue "sumiu ontem" de "sumiu em março e já foi verificado". Três destinos, todos com auditoria: confirmar encerramento (`operational_status = encerrado`), manter ativo com justificativa, ou marcar como recorte de exportação. |
+| Histórico de importações concluídas | A prévia é sobre o que vai entrar; o histórico é sobre o que entrou. |
+| Relatório por estado, exportável | Depende do histórico. |
+| Expurgo de prévia abandonada | Deliberadamente adiado: apagar sozinho o que ninguém olhou perde o rastro de que alguém tentou importar algo estranho. Se entrar, o descarte é auditado. |
+
+O caso automático — reaparecer no arquivo seguinte **desmarca sozinho** — já
+funciona e tem teste (migration 0037, `09_import_commit.sql`). O que falta é a
+decisão humana sobre quem continua ausente.
+
 ## Bloqueios abertos
 
 **Provedor de mapa e geocodificação** — Google descartado; avaliação entre Mapbox e
