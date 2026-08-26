@@ -272,9 +272,22 @@ select set_eq(
        ('is_admin()'),
        ('has_role(user_role[])'),
        -- funcoes de trigger: retornam `trigger`, e o Postgres recusa chamada
-       -- direta. O grant e heranca do padrao do schema, nao superficie.
+       -- direta ("trigger functions can only be called as triggers"). O grant e
+       -- heranca do padrao do schema, nao superficie.
+       --
+       -- `fn_audit` e `fn_handle_new_user` foram acrescentadas depois: elas NAO
+       -- apareciam no banco de desenvolvimento, que tinha passado por dezenas de
+       -- `db reset` sobre o mesmo volume. Num ENSAIO DE INSTALACAO LIMPA — volumes
+       -- destruidos, 46 migrations em sequencia — apareceram.
+       --
+       -- O inventario tinha sido montado a partir de um banco que acumulou estado,
+       -- e por isso descrevia aquele banco em vez do schema. E a mesma classe das
+       -- fixtures que passavam por dado que ja estava la, um nivel acima: a
+       -- verificacao lia o ambiente, nao o codigo.
        ('fn_block_alias_with_rules()'),
-       ('fn_protect_profile_fields()')
+       ('fn_protect_profile_fields()'),
+       ('fn_audit()'),
+       ('fn_handle_new_user()')
   $$,
   'toda funcao SECURITY DEFINER executavel por authenticated esta na lista revisada'
 );
