@@ -165,7 +165,7 @@ update public.profiles set role = 'comercial'       where email = 'comercial@veg
 
 ---
 
-## 6. As 12 verificações
+## 6. As 15 verificações
 
 ### V1 — Migrations aplicaram na ordem
 
@@ -452,6 +452,78 @@ responder. No CI vive no job `banco`, que já sobe o stack (ADR 0010).
 
 ---
 
+### V13 — Storage: upload da planilha por signed URL
+
+**Por que esta verificação existe.** O contêiner de `storage` **não sobe no ambiente
+de desenvolvimento em contêiner** usado até aqui — a CLI o para sozinha, e
+reconstruído à mão ele recusa o JWT `ES256` que o GoTrue emite. Todo o restante do
+E-006 foi exercitado no navegador; **este salto não**. É a verificação que ninguém
+vai lembrar de fazer, porque "o resto funcionou".
+
+1. `/importacoes/nova`, selecione a planilha real e declare o escopo.
+2. Esperado: redireciona para `/importacoes/<id>` com a prévia montada.
+3. No banco:
+
+```sql
+select status, storage_path, total_rows from public.import_jobs
+ order by started_at desc limit 1;
+```
+
+`status = previa`, `total_rows = 1804`, e `storage_path` no formato
+`importacoes/<id do job>.xlsx` — **derivado do id**, nunca do nome do arquivo.
+
+4. Confirme que o objeto existe no bucket `import-files`, com esse caminho exato.
+
+**Se o upload falhar**, a tela mostra o erro e o job é descartado com o motivo
+gravado — não pode sobrar pendente sem arquivo na lista:
+
+```sql
+select status, error_message from public.import_jobs
+ where error_message like '%falha ao enviar%';
+```
+
+### V14 — Storage: cópia server-side na redeclaração de escopo
+
+O caminho curto do E-006 depende de **copiar** o objeto — não de reaproveitá-lo —
+para que cada job mantenha seu artefato imutável.
+
+1. Numa prévia acima do limiar, use **"Descartar e declarar outro escopo"**.
+2. Esperado: vai para a prévia nova, já montada, **sem reenviar o arquivo**.
+3. No banco:
+
+```sql
+select j.id, j.status, j.scope_city, j.storage_path, j.derivado_de_id,
+       a.status as status_da_original, a.error_message
+  from public.import_jobs j
+  left join public.import_jobs a on a.id = j.derivado_de_id
+ order by j.started_at desc limit 1;
+```
+
+- a nova está em `previa`, com o escopo novo e `derivado_de_id` preenchido;
+- a original está `cancelada`, com `descartada: escopo redeclarado para <cidade>`;
+- os dois `storage_path` são **diferentes**, e os dois objetos existem no bucket.
+
+4. **O caminho de falha importa mais que o feliz.** Simule apagando o objeto da
+   original antes de redeclarar. Esperado: erro na tela dizendo que a prévia
+   original continua intacta, a original **ainda em `previa`**, e a derivada
+   `cancelada` com `cópia do arquivo falhou`. Descartar a original e falhar em criar
+   a substituta deixaria o operador sem nenhuma das duas, com o arquivo já enviado.
+
+### V15 — Storage: o bucket recusa o que não é planilha
+
+O teto de 20 MB existe em dois lugares de propósito — no bucket (migration 0010) e
+no código, antes do parser. Limite que só existe no Storage deixa de existir no dia
+em que o arquivo chegar por outra porta.
+
+| Tentativa | Esperado |
+|---|---|
+| arquivo `.txt` ou `.pdf` | recusa por mime type (`InvalidMimeType`), sem criar job aplicável |
+| arquivo acima de 20 MB | recusado **antes de abrir o parser**, com a mensagem do tamanho em MB |
+| `.xlsx` com cabeçalho errado | recusa nomeando as colunas ausentes — o contrato é o cabeçalho, não o nome do arquivo |
+
+Nos três casos, nenhum job pode ficar em `processando` sem arquivo: confira que a
+lista de pendentes não ganhou item.
+
 ## 7. Problemas prováveis
 
 **`supabase start` falha com porta ocupada.** Outro projeto Supabase rodando:
@@ -506,7 +578,14 @@ Depois de `db reset` os usuários somem: refaça o passo 5.
 - [ ] V9 — auditoria grava alteração de parâmetro
 - [ ] V10 — login, redirecionamentos e mensagem de erro
 - [ ] V11 — diagnóstico com seis linhas verdes
-- [ ] V12 — 254 Vitest · typecheck · lint · 37 pgTAP · 32 de paridade
+- [ ] V12 — Vitest · typecheck · lint · pgTAP · paridade
+- [ ] V13 — upload por signed URL, `storage_path` derivado do id
+- [ ] V14 — cópia na redeclaração, e o caminho de falha preservando a original
+- [ ] V15 — bucket recusa mime type, tamanho e cabeçalho errado
+
+**V13, V14 e V15 nunca foram exercitadas.** O contêiner de `storage` não sobe no
+ambiente de desenvolvimento em contêiner, e todo o restante do E-006 foi verificado
+no navegador sem elas. São as três com maior chance de conter defeito.
 
 Falhando qualquer uma, me mande o comando, a saída e o passo. Corrigimos antes da
 Sprint 1.

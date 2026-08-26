@@ -41,7 +41,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: ROUTES.MINHAS_VISITAS, label: "Minhas visitas", icon: Store, permission: "visitas.reservar", enabled: false, mobile: true, group: "operacao" },
   { href: ROUTES.ATENCAO, label: "Atenção", icon: AlertTriangle, permission: "ocorrencias.analisar", enabled: false, mobile: true, group: "operacao" },
 
-  { href: ROUTES.ESTABELECIMENTOS, label: "Estabelecimentos", icon: Store, permission: "estabelecimentos.ler", enabled: false, mobile: false, group: "cadastros" },
+  { href: ROUTES.ESTABELECIMENTOS, label: "Estabelecimentos", icon: Store, permission: "estabelecimentos.ler", enabled: true, mobile: false, group: "cadastros" },
   { href: ROUTES.PRODUTOS, label: "Modalidades", icon: Wallet, permission: "modalidades.editar", enabled: false, mobile: false, group: "cadastros" },
   { href: ROUTES.SEGMENTOS, label: "Segmentos", icon: Tags, permission: "segmentos.editar", enabled: true, mobile: false, group: "cadastros" },
 
