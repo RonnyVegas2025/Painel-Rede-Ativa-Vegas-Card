@@ -9,6 +9,61 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      absence_resolutions: {
+        Row: {
+          absent_from_import: string | null
+          establishment_id: string
+          id: string
+          reason: string
+          resolution: Database["public"]["Enums"]["absence_resolution"]
+          resolved_at: string
+          resolved_by: string | null
+          was_absent_since: string | null
+        }
+        Insert: {
+          absent_from_import?: string | null
+          establishment_id: string
+          id?: string
+          reason: string
+          resolution: Database["public"]["Enums"]["absence_resolution"]
+          resolved_at?: string
+          resolved_by?: string | null
+          was_absent_since?: string | null
+        }
+        Update: {
+          absent_from_import?: string | null
+          establishment_id?: string
+          id?: string
+          reason?: string
+          resolution?: Database["public"]["Enums"]["absence_resolution"]
+          resolved_at?: string
+          resolved_by?: string | null
+          was_absent_since?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "absence_resolutions_absent_from_import_fkey"
+            columns: ["absent_from_import"]
+            isOneToOne: false
+            referencedRelation: "import_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "absence_resolutions_establishment_id_fkey"
+            columns: ["establishment_id"]
+            isOneToOne: false
+            referencedRelation: "establishments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "absence_resolutions_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_logs: {
         Row: {
           action: Database["public"]["Enums"]["audit_action"]
@@ -1085,6 +1140,15 @@ export type Database = {
         Returns: string
       }
       request_ip: { Args: never; Returns: unknown }
+      resolve_absences: {
+        Args: {
+          p_confirmada_quantidade?: number
+          p_ids: string[]
+          p_reason: string
+          p_resolution: Database["public"]["Enums"]["absence_resolution"]
+        }
+        Returns: number
+      }
       resolve_segment_confirm: {
         Args: { p_allow?: string[]; p_deny?: string[]; p_segment_id: string }
         Returns: undefined
@@ -1123,6 +1187,10 @@ export type Database = {
       }
     }
     Enums: {
+      absence_resolution:
+        | "voltou_a_operar"
+        | "escopo_incorreto"
+        | "nao_opera_mais"
       audit_action: "insert" | "update" | "delete" | "login" | "custom"
       audit_origin: "web" | "import" | "system" | "edge_function"
       capture_point_status:
@@ -1862,6 +1930,11 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      absence_resolution: [
+        "voltou_a_operar",
+        "escopo_incorreto",
+        "nao_opera_mais",
+      ],
       audit_action: ["insert", "update", "delete", "login", "custom"],
       audit_origin: ["web", "import", "system", "edge_function"],
       capture_point_status: [

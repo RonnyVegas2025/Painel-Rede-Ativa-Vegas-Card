@@ -237,3 +237,119 @@ export async function listarLinhas(
     }),
   };
 }
+
+// ===========================================================================
+// E-008
+// ===========================================================================
+
+export interface JobConcluido {
+  id: string;
+  fileName: string;
+  scopeCity: string | null;
+  status: ImportJobStatus;
+  startedAt: string;
+  finishedAt: string | null;
+  totalRows: number;
+  createdCount: number;
+  updatedCount: number;
+  unchangedCount: number;
+  conflictCount: number;
+  errorCount: number;
+  missingCount: number;
+  requiresConfirmation: boolean;
+  confirmedAt: string | null;
+  errorMessage: string | null;
+  derivadoDeId: string | null;
+}
+
+/** O histórico: o que ENTROU na base. A prévia é sobre o que vai entrar. */
+export async function listarHistorico(limite = 30): Promise<JobConcluido[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("import_jobs")
+    .select(
+      "id, file_name, scope_city, status, started_at, finished_at, total_rows, created_count, updated_count, unchanged_count, conflict_count, error_count, missing_count, requires_confirmation, confirmed_at, error_message, derivado_de_id",
+    )
+    .in("status", ["concluida", "cancelada", "falhou"])
+    .order("started_at", { ascending: false })
+    .limit(limite);
+
+  if (error) throw new Error(`Falha ao ler o histórico: ${error.message}`);
+  return (data ?? []).map((j) => ({
+    id: j.id,
+    fileName: j.file_name,
+    scopeCity: j.scope_city,
+    status: j.status as ImportJobStatus,
+    startedAt: j.started_at,
+    finishedAt: j.finished_at,
+    totalRows: j.total_rows,
+    createdCount: j.created_count,
+    updatedCount: j.updated_count,
+    unchangedCount: j.unchanged_count,
+    conflictCount: j.conflict_count,
+    errorCount: j.error_count,
+    missingCount: j.missing_count,
+    requiresConfirmation: j.requires_confirmation,
+    confirmedAt: j.confirmed_at,
+    errorMessage: j.error_message,
+    derivadoDeId: j.derivado_de_id,
+  }));
+}
+
+export interface Ausente {
+  id: string;
+  tradeName: string;
+  externalContract: string | null;
+  cidade: string | null;
+  segmento: string | null;
+  absentSince: string;
+  /** De qual importação. Ausentes do mesmo arquivo se resolvem juntos. */
+  absentFromImport: string | null;
+  arquivo: string | null;
+  lastTransactionAt: string | null;
+  neverTransacted: boolean;
+}
+
+/**
+ * A fila de ausentes.
+ *
+ * Ordenada por **transação mais recente primeiro**, e não por data de ausência.
+ * Um comércio que transacionou semana passada e sumiu do arquivo é o sinal mais
+ * forte de que o escopo estava errado — a mesma lógica dos exemplos da confirmação
+ * deliberada, aplicada à fila inteira. Ordenar por "ausente há mais tempo" poria
+ * no topo justamente os casos já mortos.
+ */
+export async function listarAusentes(importId: string | null): Promise<Ausente[]> {
+  const supabase = await createClient();
+  let q = supabase
+    .from("establishments")
+    .select(
+      `id, trade_name, external_contract, last_transaction_at, never_transacted,
+       absent_since, absent_from_import,
+       segments(normalized_name),
+       establishment_addresses(city, is_current),
+       import_jobs!establishments_absent_from_import_fkey(file_name)`,
+    )
+    .not("absent_since", "is", null)
+    .eq("is_active", true)
+    .order("last_transaction_at", { ascending: false, nullsFirst: false })
+    .limit(500);
+
+  if (importId) q = q.eq("absent_from_import", importId);
+
+  const { data, error } = await q;
+  if (error) throw new Error(`Falha ao listar ausentes: ${error.message}`);
+
+  return (data ?? []).map((e) => ({
+    id: e.id,
+    tradeName: e.trade_name,
+    externalContract: e.external_contract,
+    cidade: (e.establishment_addresses ?? []).find((a) => a.is_current)?.city ?? null,
+    segmento: e.segments?.normalized_name ?? null,
+    absentSince: e.absent_since!,
+    absentFromImport: e.absent_from_import,
+    arquivo: e.import_jobs?.file_name ?? null,
+    lastTransactionAt: e.last_transaction_at,
+    neverTransacted: e.never_transacted,
+  }));
+}

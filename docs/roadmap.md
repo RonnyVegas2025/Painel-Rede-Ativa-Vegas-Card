@@ -34,28 +34,60 @@ Atualizado em 03/08/2026, após o complemento da Central Operacional.
 | 10 | Central de monitoramento | painel de parede, modo ampliado | 9 | — |
 | 11 | Indicadores e refinamento | relatórios, auditoria, ajustes | tudo | — |
 
-## Fronteira E-006 / E-008 — o que NÃO foi construído ainda
+## E-008 — o que foi construído, e a decisão que ele fechou
 
-Registrado aqui porque daqui a duas etapas ninguém lembra se ficou de fora por
-decisão ou por esquecimento.
+**Resolução de ausentes**, em `/importacoes`. O ADR 0011 mandava o registro ausente
+para análise administrativa; o E-005 marcava com data, o E-006 mostrava o número, e
+não havia onde a análise acontecesse. Sem ação a marca nunca saía.
 
-**Construído no E-006** (`/importacoes`): lista de **pendentes** — prévias em
-`processando` e `previa` — com aplicar, descartar e redeclarar escopo; a tela de
-nova importação; e `/importacoes/[id]` com os agregados, as cidades do arquivo, a
-tabela paginada por estado e a confirmação deliberada da trava de ausentes.
+### A decisão: ausência **não** grava `encerrado`
 
-**Fica para o E-008**, e a Sprint 1 não fecha sem:
+A pergunta era se "confirmar encerramento" deveria gravar
+`operational_status = encerrado`. O projeto já tinha respondido em dois lugares que
+ninguém havia cruzado:
 
-| Item | Por quê |
-|---|---|
-| **Resolução de ausentes** | O ADR 0011 manda o registro ausente para análise administrativa. O E-005 marca com data e o E-006 mostra o número — e **não há onde a análise acontece**. Sem ação, a marca nunca sai: a importação seguinte marca de novo, e em três meses ninguém distingue "sumiu ontem" de "sumiu em março e já foi verificado". Três destinos, todos com auditoria: confirmar encerramento (`operational_status = encerrado`), manter ativo com justificativa, ou marcar como recorte de exportação. |
-| Histórico de importações concluídas | A prévia é sobre o que vai entrar; o histórico é sobre o que entrou. |
-| Relatório por estado, exportável | Depende do histórico. |
-| Expurgo de prévia abandonada | Deliberadamente adiado: apagar sozinho o que ninguém olhou perde o rastro de que alguém tentou importar algo estranho. Se entrar, o descarte é auditado. |
+- `src/constants/operational-status.ts`, primeira linha: *"Dimensão operacional:
+  **confirmada em campo**."*
+- `docs/status-flows.md`: *"`encerrado` é definitivo e confirmado"* · *"`fechado_temporariamente`
+  não é `encerrado`. Confundir os dois derruba comércio ativo."*
 
-O caso automático — reaparecer no arquivo seguinte **desmarca sozinho** — já
-funciona e tem teste (migration 0037, `09_import_commit.sql`). O que falta é a
-decisão humana sobre quem continua ausente.
+Ausência numa planilha não é confirmação em campo — é evidência mais fraca que o
+consultor na porta, e pode ser troca de adquirente, recorte de exportação ou
+arquivo filtrado. Então o caminho administrativo grava `fechado_temporariamente`, e
+**só a visita confirma `encerrado`**. O diagrama de `status-flows.md` já previa a
+transição `fechado_temporariamente → encerrado`; faltava notar que a origem
+administrativa entra na primeira.
+
+A garantia é **estrutural**: `resolve_absences` não recebe status por parâmetro.
+Não há como pedir `encerrado` a ela porque o argumento não existe.
+
+### A assimetria das três decisões
+
+| Decisão | Efeito | Atrito |
+|---|---|---|
+| "O arquivo era um recorte" | desmarca | lote livre — é o caso mais provável quando há centenas |
+| "Continua operando" | desmarca | lote livre |
+| "Não opera mais" | `fechado_temporariamente` | por item, nenhum; **em lote, digitar a quantidade** |
+
+Desmarcar é reversível; mudar a dimensão operacional de centenas de uma vez não
+deveria ser um clique. Por item não há atrito — atrito em todo lugar é atrito em
+lugar nenhum.
+
+`absence_resolutions` guarda a decisão, o motivo, quem decidiu e **desde quando
+estava ausente** — copiado, porque `absent_since` é limpo pela resolução e sem isso
+"quanto tempo ficou na fila" deixaria de ter resposta no dia seguinte. Imutável por
+trigger, não por ausência de policy.
+
+**Histórico de importações** concluídas e descartadas, com o motivo do descarte e a
+marca de confirmação acima do limiar.
+
+### O que continua fora, de propósito
+
+**Expurgo automático de prévia abandonada.** Prévia abandonada com meses é
+informação sobre tentativas estranhas, e apagar sozinho o que ninguém olhou perde o
+rastro. O descarte manual com motivo já existe.
+
+**Relatório exportável por estado.** Sprint 6, junto dos indicadores.
 
 ## Bloqueios abertos
 

@@ -5,28 +5,38 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { ROUTES } from "@/constants/routes";
 import { requirePermission } from "@/lib/auth/require-role";
-import { listarPendentes } from "@/features/importacao/services/jobs";
+import {
+  listarAusentes,
+  listarHistorico,
+  listarPendentes,
+} from "@/features/importacao/services/jobs";
 import { ItemPendente } from "@/features/importacao/components/lista-de-pendentes";
+import { FilaDeAusentes } from "@/features/importacao/components/fila-de-ausentes";
+import { Historico } from "@/features/importacao/components/historico";
 
 export const metadata: Metadata = { title: "Importações · Rede Vegas Ativa" };
 
 /**
- * Importações pendentes.
+ * Importações: pendentes, ausentes e histórico.
  *
- * ## Escopo desta etapa (E-006)
+ * A **resolução de ausentes** é a parte que a Sprint 1 não fechava sem. O ADR 0011
+ * manda o registro ausente para análise administrativa; o E-005 marcava com data e
+ * o E-006 mostrava o número — e não havia onde a análise acontecesse. Sem ação, a
+ * marca nunca saía: a importação seguinte marcava de novo, e em três meses ninguém
+ * distinguiria "sumiu ontem" de "sumiu em março e já foi verificado".
  *
- * Só o que a revisão da prévia exige: pendentes, com aplicar, descartar e
- * redeclarar. Sem isto não há como chegar à prévia.
- *
- * **Ficam para o E-008**, e estão registrados em `docs/roadmap.md`:
- * histórico de importações concluídas, relatório por estado, e a **resolução de
- * ausentes** — a fila administrativa que o ADR 0011 prevê e que hoje não tem onde
- * acontecer. A Sprint 1 não fecha sem ela.
+ * Expurgo automático de prévia abandonada continua **fora**, de propósito: prévia
+ * abandonada com meses é informação sobre tentativas estranhas, e apagar sozinho o
+ * que ninguém olhou perde o rastro. O descarte manual com motivo já existe.
  */
 export default async function ImportacoesPage() {
   await requirePermission("importacao.executar");
 
-  const pendentes = await listarPendentes();
+  const [pendentes, ausentes, historico] = await Promise.all([
+    listarPendentes(),
+    listarAusentes(null),
+    listarHistorico(),
+  ]);
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -60,6 +70,25 @@ export default async function ImportacoesPage() {
           ))}
         </div>
       )}
+
+      <section className="mt-10">
+        <h2 className="mb-3 font-[family-name:var(--vg-font-display)] text-[length:var(--vg-text-h2)] text-[var(--vg-ink)]">
+          Ausentes aguardando análise
+        </h2>
+        <p className="mb-4 text-[length:var(--vg-text-body-sm)] text-[var(--vg-ink-secondary)]">
+          Registros que estão na base e não vieram no arquivo, dentro do escopo declarado.
+          Nada foi excluído. Ordenados por transação mais recente — quem transacionou há
+          pouco e sumiu do arquivo é o sinal mais forte de que o escopo estava errado.
+        </p>
+        <FilaDeAusentes ausentes={ausentes} />
+      </section>
+
+      <section className="mt-10">
+        <h2 className="mb-3 font-[family-name:var(--vg-font-display)] text-[length:var(--vg-text-h2)] text-[var(--vg-ink)]">
+          Histórico
+        </h2>
+        <Historico jobs={historico} />
+      </section>
     </div>
   );
 }

@@ -14,8 +14,24 @@ import {
  *   13 meios · 3.577 vínculos · 15 segmentos · 1.255 e-mails nulos
  *   61 sem número · 319 nunca transacionaram · 0 erros · 1 conflito
  *
- * A distribuição transacional saiu exata contra a medição independente:
- * 293 · 285 · 132 · 775 · 319.
+ * A distribuição transacional saiu exata contra a medição independente. Mas ela
+ * TEM PRAZO: quatro das cinco faixas são função da data em que se mede — em
+ * 24/08/2026 eram 293 · 285 · 132 · 775 · 319, e dois dias depois já eram
+ * 232 · 340 · 134 · 779 · 319, com 61 estabelecimentos saindo de `recente`.
+ *
+ * Nada disso é defeito: é o comportamento correto de uma classificação por
+ * recência. Mas nenhum teste pode afirmar aqueles quatro números contra `now()` —
+ * ficaria verde hoje e vermelho em duas semanas, por motivo nenhum, que é como
+ * teste aprende a ser ignorado (PLATFORM-STANDARDS §8).
+ *
+ * O que é ATEMPORAL, e por isso é o que se verifica:
+ *
+ *   - a soma das cinco faixas é 1.804, sempre;
+ *   - `nunca_transacionou` é 319 — não depende da data, e sim da coluna;
+ *   - as faixas não se sobrepõem nem deixam buraco.
+ *
+ * A terceira é provada por igualdade de conjuntos em
+ * `tests/parity-db/intervalo-de-recencia.parity.test.ts`, em qualquer data.
  */
 const base: LinhaCrua = {
   Empresa: "Atacadao 0340 AS",

@@ -120,9 +120,31 @@ decisão. Mas a prévia **conta e reporta** as 9 em
 errado voltar em toda importação sem ninguém notar, e quem mantém a base é quem
 pode corrigi-lo na fonte.
 
-### Distribuição de recência
+### Distribuição de recência — **quatro destes números têm data**
+
+Medição de **24/08/2026**:
 
 `293 recente · 285 atenção · 132 ação necessária · 775 crítico · 319 nunca transacionou`
+
+Medição de **26/08/2026**, mesma base, mesmo arquivo:
+
+`232 recente · 340 atenção · 134 ação necessária · 779 crítico · 319 nunca transacionou`
+
+Nada mudou na base: 61 estabelecimentos cruzaram a fronteira dos 30 dias e caíram
+em `atenção`. É o comportamento correto de uma classificação por recência.
+
+**Só dois desses números são atemporais**, e são os únicos que servem como critério
+de aceite permanente:
+
+| Atemporal | Valor | Por quê |
+|---|---|---|
+| Soma das cinco faixas | 1.804 | é a base inteira |
+| `nunca_transacionou` | 319 | vem da coluna `Última Transação`, não do relógio |
+| Cobertura | sem buraco, sem sobreposição | propriedade das faixas, não da data |
+
+Os outros quatro só valem **junto da data em que foram medidos**. Teste que os
+afirme contra `now()` fica verde hoje e vermelho em duas semanas, por motivo
+nenhum — e é assim que um teste aprende a ser ignorado.
 
 ### O que o arquivo não respondeu
 

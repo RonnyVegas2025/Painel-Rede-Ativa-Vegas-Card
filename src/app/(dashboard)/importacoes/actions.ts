@@ -274,3 +274,49 @@ export async function aplicarImportacao(
     return { error: null, ok: true };
   });
 }
+
+/**
+ * Resolve a fila de ausentes.
+ *
+ * A assimetria entre as três decisões é o ponto: desmarcar é reversível e aceita
+ * lote sem atrito; `nao_opera_mais` muda a dimensão operacional e, em lote, exige a
+ * mesma confirmação deliberada da trava de importação.
+ *
+ * **Nenhuma delas grava `encerrado`** — a RPC não recebe status por parâmetro. A
+ * dimensão operacional é definida como confirmada em campo, e ausência numa
+ * planilha é evidência mais fraca que o consultor na porta.
+ */
+export async function resolverAusencia(
+  _prev: AcaoState,
+  formData: FormData,
+): Promise<AcaoState> {
+  return comPermissao(async () => {
+    const ids = formData.getAll("id").map(String).filter((v) => v.length > 0);
+    const resolucao = String(formData.get("resolucao") ?? "");
+    const motivo = String(formData.get("motivo") ?? "").trim();
+    const quantidade = normalizarQuantidade(String(formData.get("quantidade") ?? ""));
+
+    if (ids.length === 0) {
+      return { error: "Selecione pelo menos um estabelecimento.", ok: false };
+    }
+    if (!["voltou_a_operar", "escopo_incorreto", "nao_opera_mais"].includes(resolucao)) {
+      return { error: "Decisão inválida.", ok: false };
+    }
+    if (motivo === "") {
+      return { error: "Informe o motivo: é o que fica no histórico.", ok: false };
+    }
+
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("resolve_absences", {
+      p_ids: ids,
+      p_resolution: resolucao as "voltou_a_operar" | "escopo_incorreto" | "nao_opera_mais",
+      p_reason: motivo,
+      p_confirmada_quantidade: quantidade ?? undefined,
+    });
+    if (error) return { error: error.message, ok: false };
+
+    revalidatePath(ROUTES.IMPORTACOES);
+    revalidatePath(ROUTES.ESTABELECIMENTOS);
+    return { error: null, ok: true };
+  });
+}
