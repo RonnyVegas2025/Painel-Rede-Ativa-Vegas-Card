@@ -64,6 +64,10 @@ Distinções que não podem se perder: `bloqueio_solicitado` não é bloqueio;
 `suspenso` retira das listas de aptos temporariamente; `encerrado` é definitivo;
 `fechado_temporariamente` não é encerramento; `em_reativacao` é tratativa em andamento.
 
+Ausência na planilha é evidência mais fraca que o consultor na porta: resolver a fila de
+ausentes como "não opera mais" grava `fechado_temporariamente`, e **nunca** `encerrado`. A
+RPC não tem parâmetro de status — não existe o argumento pelo qual pedir o contrário.
+
 ## 7. Precedência do marcador no mapa
 1. Indisponibilidade — `bloqueado` `suspenso` `encerrado` `cancelado`
 2. Visita ativa — `reservada` `em_deslocamento` `checkin_realizado` `em_atendimento`
@@ -93,7 +97,7 @@ com justificativa registrada em auditoria.
 `transaction_recent_days=30` · `transaction_attention_days=60` ·
 `transaction_action_days=90` · `visit_reservation_minutes=60` ·
 `checkin_radius_meters=200` · `consultant_location_update_seconds=60` ·
-`maximum_active_reservations=3`
+`maximum_active_reservations=3` · `import_missing_threshold_percent=20`
 
 Nenhum número fixo em componente. Alteração conforme papel mínimo por chave, com auditoria.
 
@@ -105,6 +109,20 @@ Datas em DD/MM/AAAA. `Nunca Transacionou` ⇒ `last_transaction_at = null`.
 
 Identidade: contrato/ponto de captura externo. **CNPJ não é chave** — o mesmo CNPJ tem
 vários endereços, contratos e terminais.
+
+O que a Sprint 1 fechou, e não se reabre sem decisão:
+
+- Ausente é calculado **dentro do escopo declarado** do job, por uma definição única
+  (`import_absent_establishments`) usada pela tela, pela contagem e pela marcação.
+- Acima do limiar, o commit **reconta**. Não lê o contador que a prévia gravou: a trava não
+  confia em quem ela deveria vigiar.
+- Confirmar acima do limiar exige digitar o número de ausentes. O caminho mais curto na tela
+  é **voltar e redeclarar o escopo**, não confirmar.
+- O commit exige `is_admin()` e roda com o cliente do usuário. **`service_role` não entra no
+  caminho da requisição** — se entrasse, a RLS não seria avaliada e a verificação de papel
+  não protegeria a inserção.
+- `import_rows` é imutável por trigger. Só `establishment_id` muda, e só de nulo para valor.
+- Resolver ausência **nunca grava `encerrado`** — ver §6 e `docs/status-flows.md`.
 
 ## 11. Perfis
 `gestor_master` · `administrativo` · `supervisor_rede` · `consultor_campo` ·
@@ -132,9 +150,11 @@ Localização de consultor legível apenas no contexto de ação ativa.
 `/segmentos` `/usuarios` `/relatorios` `/configuracoes`
 
 ## 14. Sprints
-0. Fundação: estrutura, Next.js/TS/Tailwind, Supabase, migrations base, auth, perfis, RLS,
-   parametrização, seeds, layout, componentes compartilhados, testes centrais, documentação.
-1. Estabelecimentos e importação.
+0. **Entregue.** Fundação: estrutura, Next.js/TS/Tailwind, Supabase, migrations base, auth,
+   perfis, RLS, parametrização, seeds, layout, componentes compartilhados, testes centrais,
+   documentação.
+1. **Entregue.** Estabelecimentos e importação — nove etapas, E-001 a E-009. O que ficou
+   implementado está em `docs/architecture.md`; o que ficou em aberto, em §17.
 2. Classificação, geocodificação e mapa.
 3. Ações, equipe, reserva atômica, check-in.
 4. Visita, checklist e evidências.
@@ -177,3 +197,44 @@ Não cadastrar empresas clientes no MVP. Não alterar regra de negócio sem apro
 Não espalhar condicional de modalidade pelo código. Não coletar localização fora de ação
 ativa. Não tratar cadastral `ativo` como confirmação operacional. Não permitir bloqueio
 definitivo pelo consultor. Não usar `any`. Não deixar número mágico em componente.
+
+### Antes de escrever código, ler
+
+```
+docs/architecture.md            o que está implementado
+docs/decisions/                 ADRs — decisão fechada não se reabre em silêncio
+docs/data-dictionary.md         tabelas, enums, índices e o porquê de cada constraint
+docs/status-flows.md            as cinco dimensões e as transições
+docs/permissions.md             matriz de papéis
+PLATFORM-STANDARDS.md §8        o que faz um teste verde afirmar alguma coisa
+docs/setup-validation.md        validação humana; `npm run ensaio` cobre o resto
+```
+
+### Disciplina de verificação
+
+Herdada da Sprint 1, e não é opcional:
+
+- **Medir, não afirmar.** Contagem no relatório vem de consulta, não de estimativa.
+- **Injetar o defeito.** Teste que nunca se viu vermelho não é garantia. Se a asserção não
+  pôde falhar, ela não asseverou nada.
+- **A varredura é a entrega, não a correção pontual.** A instância corrigida era a única
+  naquele dia; a próxima nasce igual.
+- **Revogar, não catalogar.** Justificativa de inventário é "precisa ser chamável", nunca
+  "é inofensivo".
+- **Nunca duas fontes para o mesmo fato.** Se o roteiro e o script cobrem o mesmo caminho,
+  um dos dois vai divergir — e nenhum dos dois avisa.
+- **Asserção de comportamento assume o papel.** `set local role`. Asserção de esquema pode
+  rodar como superusuário; asserção sobre quem pode o quê, não.
+- **Migration aplicada nunca é editada.** Correção é migration nova.
+
+## 17. Pendências registradas
+
+| Assunto | Onde | Estado |
+|---|---|---|
+| CPF de pessoa física credenciada | ADR 0014 | **em aberto** — importado e marcado como conflito; decisão de modelo pendente |
+| Vínculo `Consultores` × `profiles` | migration 0031 | fila de conciliação na Sprint 3 |
+| Unicidade definitiva de terminal | migration 0020 | provisória; depende de medição em base maior |
+| Busca textual por nome | `docs/architecture.md` | `ilike '%x%'`, sem índice que resolva |
+| Storage exercitado fora da máquina de desenvolvimento | `docs/setup-validation.md` V13–V15 | validação humana pendente |
+
+Pendência registrada é dívida com nome. Pendência não registrada é defeito com atraso.

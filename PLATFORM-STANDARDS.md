@@ -149,115 +149,153 @@ Estes itens entram na revisão como qualquer outro requisito. Contraste abaixo d
 | Policy, constraint, função e trigger | pgTAP |
 | Sincronização de token entre CSS e TS/JSON | Vitest |
 
-**Policy não se testa fora do banco.** A verificação precisa acontecer com o papel
-assumido, ou não está verificando nada.
+Toda linha de matriz de permissão tem teste correspondente que assume o papel e
+verifica que a operação proibida falha.
 
-Toda linha de matriz de permissão tem teste correspondente que assume o papel e verifica
-que a operação proibida falha.
+---
 
-### Verificação que depende de outra etapa ter feito a coisa certa não é verificação
+### A pergunta que organiza esta seção
 
-A Sprint 1 do Painel Rede Ativa produziu quatro ocorrências da mesma forma, e as quatro
-passaram despercebidas por um teste verde:
+Um teste verde afirma alguma coisa. **O quê, exatamente?**
 
-| Ocorrência | O que a verificação realmente respondia |
+Quase todos os defeitos que atravessaram revisão nos sistemas Vegas passaram por
+testes verdes — e em cada caso a resposta a essa pergunta era diferente do que
+parecia. As regras abaixo são formas de errar essa resposta, ordenadas da mais
+comum para a mais sutil.
+
+---
+
+### 8.1 Verificação que depende de outra etapa não é verificação
+
+Uma pergunta usada no lugar de outra, e o teste passa por **ausência** — de
+privilégio, de dado, de caminho percorrido.
+
+| O teste parecia dizer | Dizia de fato |
 |---|---|
-| Policy de RLS sem `GRANT` de tabela | "ninguém consegue escrever" — não "a política recusa" |
-| View sem `security_invoker` | "o dono pode ler" — não "o papel pode ler" |
-| Trava de ausentes lendo `requires_confirmation` | "a prévia calculou o campo" — não "o volume é aceitável" |
-| Limpeza de ausência dentro do ramo `atualizado` | "o dado mudou" — não "o registro reapareceu" |
+| "a policy recusa" | "ninguém consegue escrever" — faltava o `GRANT` |
+| "o papel pode ler" | "o dono pode ler" — view sem `security_invoker` |
+| "o volume é aceitável" | "a prévia calculou o campo" |
+| "o registro reapareceu" | "o dado mudou" |
+| "está autenticado" | nada sobre papel — RPC `definer` sem checagem |
 
-O padrão é sempre o mesmo: uma pergunta é usada no lugar de outra, e o teste passa por
-**ausência** — de privilégio, de dado, de caminho percorrido. Recusa por indisponibilidade
-se parece com recusa por política; contagem que não aconteceu se parece com contagem zero.
+Recusa por indisponibilidade se parece com recusa por política. Contagem que não
+aconteceu se parece com contagem zero.
 
-Três consequências práticas:
+**A trava recalcula.** Verificação não lê um campo que outra etapa gravou. Se o
+commit precisa saber quantos registros somem, ele conta — não pergunta à prévia.
 
-1. **A trava recalcula.** Verificação não lê um campo que outra etapa gravou. Se o commit
-   precisa saber quantos registros somem, ele conta — não pergunta à prévia.
-2. **Toda trava nova nasce com a injeção do defeito registrada.** Escrever o teste não
-   basta: remove-se a proteção, confirma-se que o teste fica vermelho, e a injeção fica
-   descrita no comentário ou na mensagem de commit. Teste que nunca falhou não é evidência
-   de nada.
-3. **Asserção sobre o que *não* mudou precisa de valor distinto.** Dentro de uma transação,
-   `now()` é constante e comparar `now()` com `now()` passa mesmo com o gatilho disparando.
-   O mesmo vale para comparar conjuntos que mudaram de tamanho entre as duas medições — a
-   diferença vem da população, não da escrita.
+### 8.2 Verificação impossível de falhar também não é verificação
 
-### Verificação impossível de falhar também não é verificação
+O outro lado. Uma asserção pode não depender de etapa nenhuma e ainda assim não
+verificar, porque não existe estado do mundo em que fique vermelha.
 
-O outro lado da regra acima. Uma verificação pode não depender de etapa nenhuma e ainda
-assim não verificar — porque não existe estado do mundo em que ela fique vermelha.
+**O teste de dentes distingue as duas: remova a proteção e confirme que o teste
+falha.** Se não falhar, ou a asserção é vácua, ou verifica outra coisa.
 
-O teste de dentes é o que distingue as duas: **remova a proteção e confirme que o teste
-falha.** Se não falhar, ou a asserção é vácua, ou ela verifica outra coisa.
+Dois casos reais, os dois descobertos injetando o defeito e nenhum descobrível
+lendo:
 
-Dois casos reais, os dois descobertos injetando o defeito e nenhum descobrível lendo:
+- Uma asserção de que a RPC recusada não deixava o job preso em estado transitório.
+  Não há como falhar: a exceção reverte a transação que a levantou. **Foi removida**
+  — asserção que não pode falhar não cobre nada e ainda cobra o preço de parecer que
+  cobre.
+- Uma varredura que procurava a chamada `is_admin` no corpo da função.
+  `pg_get_functiondef` devolve o corpo **com os comentários**, e o bloco que
+  explicava a checagem bastava para o casamento. Passava com a checagem desativada.
 
-- Uma asserção de que a RPC recusada não deixava o job preso em estado transitório. Não há
-  como ela falhar: a exceção reverte a transação que a levantou, então a transição volta
-  junto, qualquer que seja a ordem das linhas na função. Foi removida — asserção que não
-  pode falhar não cobre nada e ainda cobra o preço de parecer que cobre.
-- Uma varredura que procurava a chamada `is_admin` no corpo da função. `pg_get_functiondef`
-  devolve o corpo **com os comentários**, e o bloco que explicava por que a checagem estava
-  ali bastava para o casamento. A asserção passava com a checagem desativada: respondia
-  "alguém escreveu `is_admin` em algum lugar", não "a função chama `is_admin`".
+Quando a remoção da proteção não é encenável, a asserção precisa ser reescrita até
+que seja. **A injeção fica registrada** — no comentário ou na mensagem de commit —
+senão a próxima pessoa não sabe o que a asserção cobre.
 
-Quando a remoção da proteção não é encenável, a asserção precisa ser reescrita até que
-seja. Corolário: **a injeção fica registrada** — no comentário da asserção ou na mensagem
-de commit —, senão a próxima pessoa a mexer não sabe o que ela cobre.
+### 8.3 Asserção sobre o que *não* mudou precisa de valor distinto
 
-### Proibição sem caminho legítimo produz contorno, não obediência
+Dentro de uma transação, `now()` é constante: comparar `now()` com `now()` passa
+mesmo com o gatilho disparando. Um gatilho `BEFORE UPDATE` chega a sobrescrever o
+próprio valor semeado.
 
-Antes das regras de teste, uma de desenho — porque ela evita o defeito em vez de detectá-lo.
+O mesmo vale para conjuntos que mudaram de tamanho entre as duas medições — a
+diferença vem da população, não da escrita. **Fixe o conjunto antes.**
 
-`import_rows` tinha policy de leitura e **nenhuma de escrita**. Parecia a posição mais
-segura possível. Era o contrário: a importação precisa gravar aquelas linhas de algum jeito,
-e o único jeito que restava era o cliente `service_role`, que ignora a RLS inteira. A
-ausência de policy não restringia nada — encaminhava o trabalho para fora da fronteira.
+### 8.4 O teste roda com o privilégio de quem?
 
-Ao fechar um caminho, verifique se o trabalho que ele servia ainda tem uma porta:
+- **Asserção de esquema** — índice existe, constraint declarada, policy presente:
+  pode rodar como superusuário. Lê o catálogo, e o catálogo é o mesmo para todos.
+- **Asserção de constraint** — também roda como superusuário, e **não por omissão**:
+  constraint vale para todo papel, e assumir o papel faria a RLS bloquear o insert
+  *antes* de a constraint ser alcançada. O teste falharia pelo motivo errado.
+- **Asserção de comportamento com privilégio** — isto pode ser chamado, aquilo é
+  recusado: **precisa assumir o papel**, ou está medindo o ambiente.
 
-- **Existe caminho legítimo para a tarefa real?** Se a única saída é o mecanismo que
-  contorna a segurança, a proibição está produzindo o contorno.
-- **A porta legítima é a mais fácil?** Se contornar dá menos trabalho, alguém vai contornar
-  — sob prazo, e com boa intenção.
-- **A restrição está no lugar certo?** "Evidência é imutável" é sobre `UPDATE` e `DELETE`.
-  Aplicada também ao `INSERT`, proíbe o registro de existir.
+Um arquivo de teste ficou verde durante uma quebra real porque rodava tudo como
+superusuário — uma revogação de `execute` derrubou a tela e o teste não viu.
+Superusuário não esbarra em privilégio nenhum.
 
-O mesmo vale fora de RLS: campo somente-leitura sem fluxo de correção vira correção por SQL
-direto; ambiente bloqueado sem via de exceção vira credencial compartilhada.
+Semear fixtures como superusuário é correto, e não concessão: semear não é o
+comportamento sob teste.
 
-### Varredura vence correção pontual
+### 8.5 Teste vermelho por motivo rotineiro é teste que ninguém lê
 
-Quando um defeito é encontrado varrendo o schema em vez de lendo código, **a varredura é o
-entregável, não a correção.** A instância corrigida era a única naquele dia; a próxima
-nasce igual, e ninguém vai lembrar de varrer de novo.
+Uma asserção pode estar correta e ainda apodrecer, se fica vermelha em situação
+legítima e frequente.
 
-Toda categoria de superfície privilegiada tem inventário declarado em teste: tabela sem
-RLS, `TRUNCATE` concedido, view sem `security_invoker`, função `SECURITY DEFINER`
-executável por `authenticated`. Item novo fora da lista quebra a suíte, e quem o adiciona
-declara por escrito por que é seguro. Não há terceira opção, e é de propósito.
+Caso concreto: *"a tabela nasce vazia"* era verdade sobre o **seed**, não invariante
+do schema — ficava vermelha em todo banco onde alguém tivesse importado, que é o
+trabalho normal. Substituída pelo invariante que sobrevive: toda linha tem origem
+rastreável a uma importação.
 
-### Teste vermelho por motivo rotineiro é teste que ninguém lê
+- **Fixture não colide com dado real.** Prefixo reservado nos nomes, e-mails no TLD
+  `.invalid`, escopo próprio. Fixture que colide aborta o arquivo antes da primeira
+  asserção, e o erro que aparece não tem relação com o que se testava.
+- **Asserção conta as próprias fixtures**, não a tabela inteira. `count(*) = 1`
+  amarra o teste ao estado do banco.
+- **O teste semeia o que precisa.** Depender de dado importado o torna vermelho em
+  banco recém-instalado.
 
-Corolário do anterior, e o mais fácil de deixar passar: uma asserção pode estar correta e
-ainda assim apodrecer, se fica vermelha em situação legítima e frequente.
+### 8.6 Varredura vence correção pontual
 
-O caso concreto: `capture_methods` nasce vazia era verdade sobre o **seed**, não invariante
-do schema. Ficava vermelha em todo banco local onde alguém tivesse importado — que é o
-trabalho normal de três etapas seguidas. Substituída pelo invariante que sobrevive à base
-importada: toda linha tem origem rastreável a uma importação.
+Quando um defeito é encontrado varrendo o schema em vez de lendo código, **a
+varredura é o entregável, não a correção.** A instância corrigida era a única
+naquele dia; a próxima nasce igual, e ninguém vai lembrar de varrer de novo.
 
-Duas regras práticas:
+Toda categoria de superfície privilegiada tem inventário declarado em teste: tabela
+sem RLS, `TRUNCATE` concedido, view sem `security_invoker`, função
+`SECURITY DEFINER` executável por `authenticated`, função alcançável por `anon`.
+Item novo fora da lista quebra a suíte, e quem o adiciona declara por escrito por
+que é seguro.
 
-- **Fixture de teste não pode colidir com dado real.** Nomes com prefixo reservado
-  (`TESTE `), e-mails no TLD `.invalid`, e escopo próprio — uma cidade de fixture, não a
-  cidade que a operação usa. Fixture que colide aborta o arquivo inteiro antes da primeira
-  asserção, e o erro que aparece não tem nada a ver com o que se estava testando.
-- **Asserção conta as próprias fixtures, não a tabela inteira.** `count(*) from tabela = 1`
-  amarra o teste ao estado do banco; `count(*) ... where <marca da fixture> = 1` verifica o
-  mesmo fato e sobrevive a qualquer base.
+**A justificativa é "precisa ser chamável", nunca "é inofensivo".** Uma lista com
+uma entrada justificada por ausência de dano vira uma lista com três, e aí deixa de
+significar algo. Se o privilégio não serve para nada, revogue em vez de catalogar.
+
+### 8.7 O ambiente concede mais do que qualquer migration escreve
+
+A regra que as três ocorrências de privilégio herdado compartilham:
+
+> **O que a imagem concede por padrão é mais amplo do que qualquer migration
+> escreve, e nenhuma revogação genérica alcança.**
+
+`alter default privileges` da imagem base concede a papéis nomeados — e
+`revoke ... from public` **não** remove concessão nomeada; ela é entrada própria no
+ACL. Vale para tabelas e para funções, e a segunda só foi descoberta porque a
+primeira já tinha ensinado a procurar.
+
+Privilégio é **declarado** no repositório, nunca herdado. E é medido em instalação
+limpa, porque um banco que acumulou meses de trabalho descreve aquele banco, não o
+schema.
+
+### 8.8 Instalação limpa, em comando
+
+Trabalhar semanas sobre o mesmo volume esconde defeitos: uma fixture passa por dado
+que já estava lá, um privilégio parece declarado quando foi herdado, uma lista de
+exceções descreve aquele banco.
+
+O ensaio de instalação limpa é **um comando**, não uma sequência de passos: destrói
+volumes, aplica todas as migrations em ordem, confere invariantes de base virgem,
+roda a suíte e importa dado real pelas telas. Enquanto for sequência manual,
+ninguém roda no começo da sprint seguinte — que é exatamente quando vale mais.
+
+Pelas **telas**, e não por chamada direta: reimplementar a orquestração no script
+faria o ensaio verificar a reimplementação em vez do código de produção.
 
 ---
 

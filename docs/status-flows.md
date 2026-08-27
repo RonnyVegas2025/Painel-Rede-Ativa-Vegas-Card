@@ -44,6 +44,52 @@ Distinções que não podem colapsar:
 Transição para `suspenso`, `encerrado` ou de volta para `apto` exige decisão administrativa
 registrada em auditoria. O consultor nunca escreve esses três diretamente.
 
+### O caminho administrativo — ausência na planilha
+
+Existe uma segunda origem para `fechado_temporariamente`, e ela não passa por visita: a
+resolução da fila de ausentes.
+
+```
+importação não traz o registro (dentro do escopo declarado)
+        │
+        ▼
+  absent_since preenchido — fila em /importacoes/ausentes
+        │
+        ├─ voltou_a_operar   ──► absent_since limpo, operacional INALTERADO
+        ├─ escopo_incorreto  ──► absent_since limpo, operacional INALTERADO
+        └─ nao_opera_mais    ──► absent_since limpo, operacional = fechado_temporariamente
+                                          │
+                                          │  só a partir daqui, e só com visita
+                                          ▼
+                                     encerrado
+```
+
+**Ausência na planilha nunca grava `encerrado`.** Não sair num arquivo é evidência mais fraca
+que o consultor na porta: pode ser recorte de exportação, filtro esquecido, mudança de
+contrato, erro de sistema de origem. `encerrado` é definitivo, e definitivo exige quem viu.
+
+As três resoluções **não são equivalentes**, e é por isso que são três e não um botão de
+"resolver":
+
+| Resolução | O que afirma | Efeito |
+|---|---|---|
+| `voltou_a_operar` | verificado, opera | nenhum no operacional |
+| `escopo_incorreto` | o arquivo era um recorte | nenhum no operacional |
+| `nao_opera_mais` | apurado que não opera | `fechado_temporariamente` |
+
+`escopo_incorreto` é o caso **mais provável** quando há centenas de uma vez: ninguém perde
+1.412 comércios num mês. Tratar as três como a mesma coisa é o que transformaria um erro de
+exportação em baixa de cadastro.
+
+A garantia é estrutural: `resolve_absences` **não tem parâmetro de status**. Não há como
+pedir `encerrado` a ela — o argumento não existe. Guarda que depende de a próxima pessoa ler
+o comentário não é guarda.
+
+Toda resolução grava linha em `absence_resolutions` com motivo obrigatório, o autor, e uma
+**cópia** de `absent_since`. Sem a cópia, resolver a fila apagaria a marca e a decisão sumiria
+junto — e em três meses ninguém distinguiria "sumiu ontem" de "sumiu em março e já foi
+verificado", que é exatamente o problema que a fila existe para resolver.
+
 ## Visita
 
 ```

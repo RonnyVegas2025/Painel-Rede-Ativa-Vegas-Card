@@ -1,131 +1,210 @@
-# Arquitetura — Painel Rede Vegas Ativa
+# Arquitetura — o que ficou implementado
 
-## Camadas
-
-```
-página (app/)          orquestra, busca dados, não decide
-    ↓
-feature (features/)    componentes e serviços do domínio
-    ↓
-business-rules (lib/)  função pura, sem I/O, testável
-    ↓
-constants (constants/) vocabulário e valores
-```
-
-A dependência é sempre para baixo. `constants` não importa nada do projeto.
-
-## A regra que sustenta a testabilidade
-
-Funções de `business-rules` **não leem o banco**. Recebem os parâmetros por argumento.
-
-```ts
-// certo — testável com 20 casos em milissegundos
-calculateTransactionStatus(lastTransactionAt: Date | null, thresholds: RecencyThresholds)
-
-// errado — precisa de banco para testar, e esconde a dependência
-calculateTransactionStatus(establishment: Establishment)
-```
-
-Quem carrega `system_settings` é `src/lib/settings/get-settings.ts`, com cache de
-requisição, e repassa os limites para baixo.
-
-## Cliente Supabase
-
-Três clientes, papéis distintos:
-
-| Arquivo | Contexto | Chave |
-|---|---|---|
-| `lib/supabase/client.ts` | browser | anon |
-| `lib/supabase/server.ts` | Server Component, Route Handler, Server Action | anon + cookies |
-| `lib/supabase/middleware.ts` | renovação de sessão | anon |
-| `lib/supabase/admin.ts` | worker e importação | service_role |
-
-`admin.ts` importa `server-only` no topo. Se algum dia for importado num Client Component,
-o build quebra em vez de vazar a chave de serviço para o navegador.
-
-## Fluxo de autenticação
-
-1. `middleware.ts` renova a sessão a cada requisição e protege as rotas do grupo `(dashboard)`.
-2. O Custom Access Token Hook injeta `user_role` como claim no JWT no momento da emissão.
-3. As policies leem o claim. Nenhuma policy consulta `profiles` para proteger `profiles`.
-4. `require-role.ts` faz a segunda barreira no servidor. A interface esconder o botão é a
-   terceira, e a menos importante.
-
-Consequência operacional: mudar o papel de um usuário só surte efeito no próximo token.
-Para efeito imediato, revogar a sessão. Está documentado no ADR 0005.
-
-## Classificação por recência — SQL como fonte de verdade
-
-O mapa filtra por área visível, então o filtro roda em SQL. A tela mostra o mesmo rótulo em
-TypeScript. Duas implementações da mesma regra divergem com o tempo, então existe um teste
-de paridade que roda o mesmo conjunto de casos contra as duas.
-
-Detalhe técnico que restringe o desenho: a função SQL lê os limites de `system_settings`,
-portanto é `STABLE`, não `IMMUTABLE`, e **não pode ser usada em índice**. O índice vai em
-`last_transaction_at`; o filtro compara datas com os limites passados como parâmetro. Se
-alguém tentar `create index on establishments (calculate_transaction_status(...))`, o
-Postgres recusa — e está correto: se o limite mudar, um índice materializado ficaria mentindo.
-
-## Fuso horário
-
-Tudo em `timestamptz`. "Dias sem transação" é calculado em `America/Sao_Paulo`, senão uma
-transação das 22h de ontem vira "hoje" ou "anteontem" dependendo do horário de verão do
-servidor. A conversão é explícita em ambas as implementações e coberta pelo teste de paridade.
-
-## Auditoria
-
-Trigger genérico `fn_audit()` em `after insert/update/delete`, gravando em `audit_logs` via
-função `SECURITY DEFINER`. Ninguém tem `update` nem `delete` em `audit_logs`, nem o
-`gestor_master`. Log que pode ser editado não é log.
-
-O IP não vem de `inet_client_addr()` — no Supabase isso devolve o endereço do pooler, igual
-para todo mundo. Vem de `current_setting('request.headers', true)` quando disponível; caso
-contrário fica nulo. Ver ADR sobre o assunto em `decisions/`.
-
-## Realtime
-
-`postgres_changes` respeita RLS, mas avalia as policies por evento e por assinante. Em mapa
-com muitos consultores isso escala mal. A partir da Sprint 3, eventos de reserva e visita vão
-por Broadcast a partir de trigger, com canal por ação — a decisão de autorização acontece uma
-vez, na entrada do canal.
-
-## Testes
-
-| Alvo | Ferramenta |
-|---|---|
-| business-rules, utils, matriz de permissão | Vitest |
-| paridade SQL × TypeScript | Vitest contra banco local |
-| policy, constraint, função SQL, trigger | pgTAP |
-
-Policy não se testa com Vitest. A verificação precisa acontecer dentro do banco, com o papel
-assumido, ou não está verificando nada.
+Descreve o sistema **como ele é** ao fim da Sprint 1, não como foi planejado. Onde
+os dois divergem, a divergência está anotada com o motivo.
 
 ---
 
-## Evolução prevista
+## 1. As três camadas, e o que decide em cada uma
 
-O produto tem quatro pilares (ver `roadmap.md`). Os dois primeiros — operação de campo
-e central de atendimento — estão no roadmap de sprints. Inteligência da rede e
-inteligência comercial são evolução sem data.
+```
+  TELA            server components · server actions
+    │             não calcula regra; lê o que o serviço entrega
+    ▼
+  REGRA PURA      src/lib/business-rules/
+    │             funções que NÃO leem o banco — recebem tudo por argumento.
+    │             É o que as torna testáveis, e o que permitiu rodar as 1.804
+    ▼             linhas reais por elas antes de qualquer tabela existir.
+  BANCO           RLS · constraints · triggers · RPC
+                  a fronteira REAL. Menu e guarda de rota são conveniência.
+```
 
-Nada disso muda o que está construído. O que muda é uma disciplina que precisa ser
-mantida a partir de agora, porque analítica não se retroage:
+**A regra pura não é uma camada de conveniência.** Ela existe porque a mesma
+decisão precisa acontecer em dois lugares — na tela, para mostrar o rótulo, e no
+banco, para filtrar — e duas implementações da mesma regra divergem. O arnês de
+paridade (ADR 0010) compara as duas contra a mesma entrada, e o que ele compara é
+**uma com a outra**, nunca com valores escritos à mão.
 
-**Registrar toda transição de estado com o momento em que ocorreu.** Métrica como
-"taxa de recuperação de estabelecimentos" ou "produtividade da equipe" depende de saber
-quando cada coisa mudou. Estado atual sem trilha responde "como está", nunca "como
-chegou aqui", e a trilha não se reconstrói depois.
+## 2. Identidade de estabelecimento
 
-Isso já está em vigor: `audit_logs` é somente-inserção, os endereços são históricos com
-`is_current`, e as tabelas de histórico previstas para atendimento seguem o mesmo
-padrão. A regra é não abrir exceção.
+```
+Contrato presente?  ──sim──▶  identidade por `external_contract`
+       │
+       não
+       ▼
+CNPJ e endereço?    ──sim──▶  fallback: cnpj + hash do endereço normalizado
+       │
+       não
+       ▼
+                              linha nova
+```
 
-Quando os módulos analíticos chegarem, eles não devem consultar as tabelas operacionais
-diretamente — painel com leitura pesada sobre tabela com RLS e escrita concorrente
-degrada a operação de campo. O caminho é modelo de leitura próprio, pela mesma razão
-que motivou `transaction_daily_metrics`.
+O hash é **coluna gerada** pelo banco sobre os componentes do endereço, composta
+por `address_hash_input`. A aplicação nunca grava — e a função existe separada da
+coluna justamente para que o importador possa calcular o mesmo hash **antes** de
+gravar, sem reproduzir a expressão de memória.
 
-**Health Score** é evolução prevista, dependente da origem transacional. Quando for
-implementado, segue o princípio já aplicado a `transaction_status`, `disponivel` e
-`sla_state`: **derivado, nunca gravado como fonte de verdade**, com pesos em tabela
-parametrizável e composição visível na interface. Detalhamento em `roadmap.md`.
+Medido na base real: 1.804 contratos, todos distintos; **294 raízes de CNPJ**, com
+CNPJ completo único; 67 endereços repetidos (shoppings) e **zero** pares
+CNPJ+endereço repetidos. O fallback não foi exercitado por esta base — e continua
+implementado e testado, porque a próxima pode exercitá-lo.
+
+## 3. Importação como sincronização
+
+```
+  arquivo (.xlsx)
+       │  lerPlanilha — o ÚNICO lugar que conhece o exceljs
+       ▼
+  LinhaCrua[]  ─── normalizeLinhaImportacao ──▶ LinhaNormalizada
+       │                                              │
+       │                          classifyImportRow ◀─┘  (recebe o estado atual
+       ▼                                                  por ARGUMENTO)
+  import_rows        ← a PRÉVIA escreve aqui, e só aqui
+       │                nenhuma tabela de domínio é tocada
+       │  import_finalize_preview: confere total E sequência sem buraco
+       ▼
+  status = previa    ← só agora é aplicável
+       │
+       │  import_commit — aplica o que a prévia classificou; NÃO reclassifica
+       ▼
+  establishments · addresses · capture_points · segments · capture_methods
+```
+
+**Por que o commit não reclassifica.** Se prévia e commit decidissem cada um por
+conta, poderiam divergir — e o operador teria aprovado uma coisa e recebido outra.
+
+**Por que ele ainda assim reconta os ausentes.** Trava que lê um campo gravado pela
+prévia confia em quem deveria vigiar. O commit conta por conta própria, mas pela
+**mesma definição** (`import_absent_establishments`): recalcular continua sendo
+recalcular; o que não pode existir é uma segunda *regra*.
+
+### O estado do job é o que impede o lote parcial
+
+```
+processando ──▶ previa ──▶ aplicando ──▶ concluida
+     │             │
+     └─────────────┴──▶ cancelada  (descarte, com motivo)
+```
+
+`processando` existe porque 1.804 inserções a partir do Node não são uma transação.
+Queda na linha 900 deixaria contagens plausíveis, e o commit aplicaria metade. Só
+vira `previa` quando a contagem gravada bate com o total lido **e** a sequência de
+`line_number` não tem buraco — a segunda checagem é independente do que o cliente
+afirma.
+
+`aplicando` é o ponto de serialização: o commit exige `previa` e muda na mesma
+transação, então clicar duas vezes não importa duas vezes.
+
+## 4. Ausente: marcado, nunca apagado
+
+Registro na base, dentro do **escopo declarado**, que não veio no arquivo. Sem o
+escopo, importar o recorte de uma cidade faria o resto da base aparecer como sumido
+(ADR 0011).
+
+- **Reaparecer desmarca**, qualquer que seja o status da linha. A pergunta é
+  "apareceu?", não "mudou?" — confundir as duas fazia o caso mais comum falhar.
+- **Resolver** grava em `absence_resolutions` com motivo, autor e desde quando
+  estava ausente (copiado, porque a marca é limpa).
+- **Nunca grava `encerrado`.** A dimensão operacional é definida como confirmada em
+  campo; ausência numa planilha é evidência mais fraca que o consultor na porta. O
+  caminho administrativo para em `fechado_temporariamente`, e a RPC não recebe
+  status por parâmetro — não há como pedir o definitivo a ela.
+
+## 5. Elegibilidade — falha fechada
+
+```
+card_products.eligibility_mode
+   all        → todos os segmentos ativos
+   allowlist  → só os com rule_type = 'allow'
+   denylist   → todos, exceto rule_type = 'deny'
+```
+
+Segmento não mapeado **nunca** é elegível em `allowlist`. Na base real isso não é
+hipótese: os 15 valores de `Subgrupo` têm interseção zero com qualquer catálogo
+prévio, então logo após a primeira importação a fila cobre 100% da base e nada é
+elegível às modalidades restritas até alguém resolvê-la.
+
+Por isso `/segmentos` é entregável, não extra — e por isso a fila ordena por
+**impacto**, não por nome: a primeira pendência esconde centenas de
+estabelecimentos, a última esconde um.
+
+## 6. Segurança — três camadas, e qual delas é real
+
+| Camada | O que faz | O que **não** faz |
+|---|---|---|
+| Menu (`enabled`) | esconde o que não existe | não protege nada |
+| Guarda de rota | evita renderizar | contornável pela API |
+| **GRANT + RLS** | **a fronteira** | — |
+
+Sequência que este projeto aprendeu a respeitar, e cada item veio de um defeito
+real:
+
+1. **GRANT antes de policy.** Policy sem privilégio de tabela é código morto — o
+   GRANT nega antes de a RLS ser avaliada (ADR 0012).
+2. **Privilégio declarado, nunca herdado.** A imagem concede por
+   `alter default privileges` mais do que qualquer migration escreve, e nenhuma
+   revogação genérica alcança. Vale para tabelas (0011, 0014/0015) e para funções
+   (0047).
+3. **`security definer` desliga a RLS por dentro.** Quem usa checa o papel na
+   entrada, ou o `grant execute` vira o único controle — e ele só pergunta "está
+   logado?".
+4. **Função `invoker` propaga o papel.** O que ela chama por dentro também precisa
+   de privilégio, e a falta aparece como erro de regra.
+
+Inventário das funções `security definer` executáveis por `authenticated` é
+verificado em `05_grants_and_rls.sql`: função nova fora da lista quebra a suíte.
+`anon` não executa função alguma de `public` e não tem privilégio de tabela algum.
+
+## 7. Imutabilidade — por trigger, não por ausência de policy
+
+`import_rows` e `absence_resolutions` são evidência. Ausência de policy protege
+contra usuário, **não** contra `security definer` nem SQL direto — e "só o código X
+escreve" descreve comportamento, não garantia.
+
+Em `import_rows`, apenas `establishment_id` muda, e só de nulo para valor: é o elo
+de resultado, preenchido pelo commit ao criar. Sem ele, "veio nesta importação?"
+não seria pergunta que a tabela respondesse, e todo recém-criado apareceria como
+ausente na importação que o criou.
+
+## 8. Desempenho — o que é indexado e por quê
+
+`calculate_transaction_status` é `STABLE` e lê `system_settings`: **não é
+indexável**. Filtrar por status calculando-o em cada linha faz varredura completa.
+
+A tela converte o status num **intervalo de datas** (`intervalo-de-recencia.ts`) e
+compara `last_transaction_at`, que é indexado. A equivalência entre as duas formas é
+verificada por igualdade de conjuntos contra a função SQL, sobre dados reais.
+
+Medido com `EXPLAIN ANALYZE`:
+
+```
+intervalo → Bitmap Index Scan on establishments_recencia
+status    → Seq Scan, Rows Removed by Filter: 1464
+```
+
+**O que não está resolvido:** a busca por nome usa `ilike '%termo%'`, que nenhum
+btree serve. `pg_trgm` exigiria decisão registrada e custa escrita em cada
+importação de 7.200 linhas — e a medição que justificaria ainda não existe.
+
+## 9. Onde as coisas ficam
+
+```
+src/lib/business-rules/   regra pura, sem banco. O coração.
+src/features/<modulo>/    domínio: serviços, componentes, tipos
+src/components/           ui/ layout/ brand/ — não conhecem domínio
+src/constants/            valores e enums. Nunca importa business-rules.
+supabase/migrations/      47 arquivos, em ordem, nunca editados depois de aplicados
+supabase/tests/           pgTAP — comportamento, não catálogo
+tests/parity-db/          arnês SQL × TypeScript (ADR 0010)
+tests/design/             invariantes estruturais: tokens, navegação, tipos, diretivas
+scripts/ensaio.sh         instalação limpa de ponta a ponta
+```
+
+## 10. O que a Sprint 1 deixou registrado como dívida
+
+| Item | Onde |
+|---|---|
+| CPF de pessoa física — decisão em aberto | ADR 0014 |
+| `import_commit` continua `security definer` | migration 0038, com o motivo |
+| Busca por nome sem índice | migration 0045 |
+| Relatório exportável por estado | Sprint 6 |

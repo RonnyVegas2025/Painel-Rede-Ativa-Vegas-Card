@@ -7,7 +7,11 @@ Atualizado em 03/08/2026, após o complemento da Central Operacional.
 | Sprint | Estado |
 |---|---|
 | 0 — Fundação | **concluída**, aguardando validação no ambiente real |
-| 1 a 11 | planejadas |
+| 1 — Estabelecimentos e importação | **concluída** (E-001 a E-009); V13–V15 de Storage pendentes de validação humana |
+| 2 a 11 | planejadas |
+
+O que a Sprint 1 deixou implementado está em `docs/architecture.md`; as pendências
+registradas, em `CLAUDE.md` §17.
 
 ## Sequência
 

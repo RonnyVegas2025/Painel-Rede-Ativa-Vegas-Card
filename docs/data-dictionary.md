@@ -267,3 +267,121 @@ Escopo, contadores e a trava de ausentes. Detalhe e rationale no **ADR 0011**.
 Leitura restrita a quem executa importação: `raw_data` guarda telefone, e-mail e
 razão social de terceiros. **Sem policy de escrita** — a linha crua é evidência do
 que o arquivo trazia, não dado editável.
+
+---
+
+# Sprint 1 — o que as etapas E-005 a E-008 acrescentaram
+
+## Colunas de `establishments` acrescentadas pela leitura da base real
+
+| Coluna | Tipo | Notas |
+|---|---|---|
+| `acquisition_channel` | text | coluna `Captação` — **como o comércio foi credenciado** (Pessoalmente, E-Mail, Telefone, Site, Licitação). Não confundir com meio de captura de transação, que é `capture_methods` e vem da coluna `Terminal` |
+| `assigned_consultants_raw` | text | coluna `Consultores`, crua |
+| `absent_since` | timestamptz | desde quando o registro deixou de vir no arquivo, dentro do escopo declarado |
+| `absent_from_import` | uuid | FK `import_jobs`, qual importação marcou |
+
+`assigned_consultants_raw` **não é vinculado a `profiles`**, e isso é decisão, não pendência:
+dos 28 valores distintos, o mais frequente — `Vegas Card do Brasil`, em 808 das 1.804 linhas
+— é a empresa, não uma pessoa. Casar nome por aproximação erra atribuição, e aqui a
+atribuição decide quem visita o quê. A conciliação explícita fica para a Sprint 3, como fila,
+igual à de segmentos.
+
+Não existe coluna "voltou a aparecer". Reaparecer no arquivo seguinte limpa `absent_since`, e
+a trilha registra as duas transições. Guardar histórico de ausência numa coluna seria inventar
+uma tabela de histórico pela metade — a tabela de verdade é `absence_resolutions`.
+
+`establishments_ausentes on (absent_since) where absent_since is not null` — a fila
+administrativa é sempre uma fração da base.
+
+## Ciclo da importação
+
+### Enum `import_job_status`
+
+`previa` · `aplicando` · `concluida` · `cancelada` · `falhou`
+
+O commit exige `previa` e muda para `aplicando` **na mesma transação**. É isso que torna
+confirmar duas vezes inofensivo: a segunda chamada encontra estado diferente e não
+reprocessa. Idempotência pelo estado que já pertence ao modelo, em vez de um identificador
+que o cliente precisa carregar.
+
+`processando` é o estado da montagem da prévia, anterior a `previa` — ver as RPCs do ciclo
+em `architecture.md`.
+
+### Colunas acrescentadas a `import_jobs`
+
+| Coluna | Tipo | Notas |
+|---|---|---|
+| `status` | `import_job_status` | not null, default `previa` |
+| `duplicated_capture_methods` | integer | linhas cujo campo `Terminal` repetia o mesmo meio — `CIELO / CIELO`. São 9 na base atual |
+| `addresses_without_number` | integer | endereços com `N.º: 0`. São 61 |
+| `error_message` | text | |
+| `derivado_de_id` | uuid | FK `import_jobs` — aponta para a importação descartada que originou esta, quando o operador redeclara o escopo |
+
+Os dois contadores são **defeito da origem, não conflito**: não bloqueiam nada. Contá-los é o
+que impede que deduplicar em silêncio faça o dado errado voltar em toda importação sem
+ninguém notar.
+
+`derivado_de_id` responde depois a pergunta que alguém vai fazer em março: "por que esta
+importação existe?". Sem o elo, a redeclaração de escopo apaga a própria história.
+
+### `import_rows` — imutabilidade
+
+`import_row_status`: `novo` · `atualizado` · `inalterado` · `conflito` · `erro` · `ausente`.
+
+A tabela tem trigger `before update` (`fn_import_rows_imutavel`) que permite **um único**
+campo mudar: `establishment_id`, e apenas de nulo para valor. `raw_data`, `status` e
+`line_number` não mudam nunca.
+
+A garantia anterior era "o commit é o único escritor" — o que descreve o comportamento atual,
+não uma garantia. A linha crua é evidência do que o arquivo trazia; evidência que a aplicação
+pode reescrever não é evidência.
+
+`establishment_id` é preenchido pelo commit também quando a linha **cria** o estabelecimento,
+não só quando o identifica. Sem isso, todo registro recém-criado apareceria como ausente na
+própria importação que o criou.
+
+## absence_resolutions
+
+### Enum `absence_resolution`
+
+| Valor | Semântica | Efeito no operacional |
+|---|---|---|
+| `voltou_a_operar` | reaparecerá na próxima importação, ou já foi verificado por telefone | nenhum |
+| `escopo_incorreto` | o arquivo era um recorte | nenhum |
+| `nao_opera_mais` | não opera mais | `fechado_temporariamente` |
+
+| Coluna | Tipo | Notas |
+|---|---|---|
+| `id` | uuid PK | |
+| `establishment_id` | uuid | FK, on delete cascade |
+| `resolution` | `absence_resolution` | not null |
+| `reason` | text | not null, `check (btrim(reason) <> '')` |
+| `was_absent_since` | timestamptz | **cópia** de `absent_since` no momento da resolução |
+| `absent_from_import` | uuid | FK `import_jobs` |
+| `resolved_by` | uuid | FK `profiles` |
+| `resolved_at` | timestamptz | default now() |
+
+`was_absent_since` é cópia de propósito: resolver limpa `absent_since`, e sem a cópia a
+pergunta "quanto tempo ficou na fila" deixaria de ter resposta no dia seguinte.
+
+Leitura e escrita apenas para `is_admin()`. Sem `update`, sem `delete`, com trigger de
+imutabilidade — decisão registrada não se reescreve.
+
+A RPC `resolve_absences` **não recebe status por parâmetro**. `nao_opera_mais` grava
+`fechado_temporariamente`; não existe argumento pelo qual pedir `encerrado`. A garantia é
+estrutural, não documental — ver `status-flows.md`.
+
+## Índices da listagem (migration 0045)
+
+| Índice | Para |
+|---|---|
+| `establishments_recencia (last_transaction_at desc nulls last) where is_active` | ordenação e faixa transacional |
+| `establishments_nunca_transacionou` | o filtro `nunca_transacionou`, que é `is null` e não faixa |
+| `establishments_operacional` · `establishments_cadastral` · `establishments_segmento` | filtros da tela |
+| `establishment_addresses_cidade_corrente` | filtro por cidade sobre o endereço corrente |
+
+Filtrar por status transacional **não computa o status de todas as linhas para depois
+filtrar**: a regra é invertida em intervalo de datas (`intervaloDeRecencia`) e o banco usa o
+índice. A busca textual por nome continua sendo `ilike '%x%'` e **não** é resolvida por esses
+índices — está registrada como dívida em `architecture.md`.

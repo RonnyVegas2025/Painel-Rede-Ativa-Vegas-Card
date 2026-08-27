@@ -35,11 +35,69 @@ Escopos parciais:
   transformaria qualquer descuido de rota em escalada de privilégio. Detalhe e
   verificação no ADR 0005, seção Consequências.
 
+## Sprint 1 — implementada
+
+| Tabela | GM | ADM | SUP | CON | SUP.T | COM | CSL |
+|---|---|---|---|---|---|---|---|
+| `establishments` | L E | L E | L | L | L | L | L |
+| `establishment_addresses` | L E | L E | L | L | L | L | L |
+| `establishment_capture_points` | L E | L E | L | L | L | L | L |
+| `capture_methods` | L E | L E | L | L | L | L | L |
+| `import_jobs` | L E | L E | — | — | — | — | — |
+| `import_rows` | L E | L E | — | — | — | — | — |
+| `absence_resolutions` | L E | L E | — | — | — | — | — |
+
+"Gestão" nas policies é `is_admin()` — `gestor_master` ou `administrativo`. As três tabelas
+de importação não são legíveis pelos demais papéis porque `raw_data` guarda telefone, e-mail
+e razão social de terceiros.
+
+Nenhuma tabela da Sprint 1 tem policy de `DELETE`, para papel nenhum. Registro ausente vai
+para análise administrativa; não some.
+
+**`import_rows` e `absence_resolutions` não têm `UPDATE` útil.** Ambas têm trigger de
+imutabilidade: em `import_rows` só `establishment_id` muda, e só de nulo para valor;
+`absence_resolutions` não muda nada. Evidência que a aplicação pode reescrever não é
+evidência.
+
+### O caminho de escrita da importação passa pela RLS
+
+A prévia grava `import_rows` com o **cliente do usuário**, não com `service_role`. A policy
+de `insert` é escopada ao próprio job, em `processando`:
+
+```
+is_admin()
+and exists (select 1 from import_jobs j
+             where j.id = import_id
+               and j.status = 'processando'
+               and j.uploaded_by = (select auth.uid()))
+```
+
+Sem o escopo, a policy diria "gestão pode inserir linhas" sem dizer **em qual job** — e um
+operador contaminaria a prévia do outro. Com `service_role`, a RLS não seria avaliada e a
+verificação de papel dentro da RPC não protegeria a inserção que acontece um andar acima.
+
+### Privilégio de execução de função
+
+Estabelecido pela migration 0047, e verificado pelo pgTAP `05`:
+
+| Papel | Funções em `public` |
+|---|---|
+| `anon` | **nenhuma** |
+| `authenticated` | apenas as declaradas, uma a uma, com razão registrada |
+| `supabase_auth_admin` | apenas `custom_access_token_hook` |
+
+O ambiente concede mais do que qualquer migration escreve: `pg_default_acl` dava `EXECUTE`
+em `public` a `anon`, `authenticated` e `service_role`, e `revoke ... from public` nunca
+remove concessão a papel nomeado. Eram 37 funções alcançáveis por `anon`. A correção é
+declarar o default, revogar em massa e conceder uma a uma — não catalogar.
+
+Nenhuma função de trigger é executável por papel de aplicação. Gravador de auditoria
+chamável à mão não é auditoria.
+
 ## Sprints seguintes — intenção registrada
 
 | Recurso | GM | ADM | SUP | CON | SUP.T | COM | CSL |
 |---|---|---|---|---|---|---|---|
-| `establishments` | L E | L E | L | L | L | L | L |
 | `field_actions` | L E | L | L E | P L | — | — | L |
 | `visits` | L | L | P L E | P L E | — | — | L |
 | `visit_attachments` (fotos) | L | L | P L | P L E | P L | **—** | — |

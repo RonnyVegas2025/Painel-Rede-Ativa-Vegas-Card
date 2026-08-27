@@ -67,3 +67,25 @@ Colisão de contrato dentro do mesmo arquivo não decide sozinha: a linha vai pa
   confirma que a verificação acusa, e restaura.
 - Buscar "todas as lojas deste CNPJ" é uma consulta legítima e frequente — o índice em
   `cnpj` não é opcional.
+
+
+---
+
+## Correção após a medição da base real (26/08/2026)
+
+O texto acima diz que "o mesmo CNPJ tem vários endereços e contratos". A medição
+das 1.804 linhas mostra que **quem repete é a RAIZ** — os oito primeiros dígitos —
+e não o CNPJ completo:
+
+| Medida | Valor |
+|---|---|
+| linhas | 1.804 |
+| CNPJs completos distintos | 1.803 (o restante é o CPF do ADR 0014) |
+| **raízes distintas** | **294** |
+| endereços repetidos | 67 (shoppings) |
+| pares CNPJ + endereço repetidos | **0** |
+
+O raciocínio não muda: CNPJ continua não sendo chave, porque a mesma empresa tem
+muitos pontos e é a raiz que se repete entre eles. Mas a precisão sim — e a
+diferença importa para quem for desenhar agrupamento por empresa na Sprint 2, que é
+justamente o caso em que "CNPJ" e "raiz do CNPJ" dão respostas diferentes.
