@@ -36,6 +36,12 @@ select throws_ok(
   'acao da fila sem usuario identificado e recusada com a frase certa'
 );
 
+-- ASSUME O PAPEL. Sem isto o arquivo roda como superusuario, que nao esbarra em
+-- privilegio nenhum: a 0047 revogou `execute` de `assert_usuario_identificado` e
+-- este teste continuou verde enquanto a tela quebrava. Verificacao que roda com
+-- privilegio que o usuario real nao tem nao verifica o caminho do usuario real.
+set local role authenticated;
+
 select set_config(
   'request.jwt.claims',
   '{"sub":"eeeeeeee-0000-4000-8000-000000000009","user_role":"gestor_master"}',

@@ -23,7 +23,7 @@
 -- exige is_admin(). Enfraquecer esta varredura reabre aquilo. Ver ADR 0012.
 
 begin;
-select plan(13);
+select plan(15);
 
 -- 1. TRUNCATE ignora RLS -------------------------------------------------------
 -- Um usuario logado com TRUNCATE esvazia audit_logs sem passar por policy
@@ -267,27 +267,16 @@ select set_eq(
        -- devolvem o papel/equipe/IP DO PROPRIO chamador; nao ha o que escalar.
        ('auth_role()'),
        ('auth_team_id()'),
-       ('request_ip()'),
        -- sao a propria checagem de papel; exigir papel para checar papel e ciclo.
        ('is_admin()'),
        ('has_role(user_role[])'),
-       -- funcoes de trigger: retornam `trigger`, e o Postgres recusa chamada
-       -- direta ("trigger functions can only be called as triggers"). O grant e
-       -- heranca do padrao do schema, nao superficie.
-       --
-       -- `fn_audit` e `fn_handle_new_user` foram acrescentadas depois: elas NAO
-       -- apareciam no banco de desenvolvimento, que tinha passado por dezenas de
-       -- `db reset` sobre o mesmo volume. Num ENSAIO DE INSTALACAO LIMPA — volumes
-       -- destruidos, 46 migrations em sequencia — apareceram.
-       --
-       -- O inventario tinha sido montado a partir de um banco que acumulou estado,
-       -- e por isso descrevia aquele banco em vez do schema. E a mesma classe das
-       -- fixtures que passavam por dado que ja estava la, um nivel acima: a
-       -- verificacao lia o ambiente, nao o codigo.
-       ('fn_block_alias_with_rules()'),
-       ('fn_protect_profile_fields()'),
-       ('fn_audit()'),
-       ('fn_handle_new_user()')
+       -- sao a propria checagem de papel, avaliada DENTRO de policy: exigir
+       -- papel para checar papel e ciclo, e sem `execute` toda leitura
+       -- protegida falha.
+       ('is_admin()'),
+       ('has_role(user_role[])'),
+       ('auth_role()'),
+       ('auth_team_id()')
   $$,
   'toda funcao SECURITY DEFINER executavel por authenticated esta na lista revisada'
 );
@@ -316,6 +305,47 @@ select is(
           !~ 'public\.(is_admin|has_role)\s*\('),
   null,
   'funcao definer que escreve no dominio chama is_admin() ou has_role() no codigo'
+);
+
+-- 14 e 15. PRIVILEGIO DE FUNCAO, que a assercao 2 nunca olhou -----------------
+--
+-- A assercao 2 diz "anon nao tem privilegio algum em public" — e le
+-- `information_schema.role_table_grants`, que so enxerga TABELAS. Funcoes ficaram
+-- de fora, e a imagem do Supabase declara privilegio PADRAO DE FUNCOES em `public`
+-- para anon, authenticated e service_role.
+--
+-- Resultado, medido num banco limpo antes da 0047: 37 funcoes de `public`
+-- executaveis por `anon`, entre elas `import_commit` e `resolve_absences`. Nao
+-- havia escalada — as duas exigem papel, e anon nao tem nenhum — mas e exatamente
+-- o que a assercao 2 ja dizia sobre tabelas, aplicado a outra categoria de objeto.
+--
+-- `revoke execute ... from public` nas RPCs nao resolvia: ele tira a entrada de
+-- PUBLIC, e as concessoes aos tres papeis sao entradas PROPRIAS.
+
+-- 14. anon so alcanca o que a sessao precisa ANTES de haver sessao.
+select is(
+  (select array_agg(p.oid::regprocedure::text order by p.oid::regprocedure::text)
+     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and has_function_privilege('anon', p.oid, 'execute')),
+  array['auth_role()']::text[],
+  'anon executa apenas auth_role(), que a policy avalia antes de o papel existir'
+);
+
+-- 15. Funcao de trigger nao recebe `execute` de ninguem.
+--
+-- O Postgres recusa chamada direta a elas. Cataloga-las no inventario como
+-- "inofensivas" seria pior que revogar: uma lista cuja justificativa e a ausencia
+-- de dano deixa de significar algo depois de duas ou tres entradas assim.
+select is(
+  (select array_agg(p.oid::regprocedure::text order by p.oid::regprocedure::text)
+     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and pg_get_function_result(p.oid) = 'trigger'
+      and (has_function_privilege('anon', p.oid, 'execute')
+        or has_function_privilege('authenticated', p.oid, 'execute'))),
+  null,
+  'nenhuma funcao de trigger e executavel: o Postgres recusaria a chamada de qualquer forma'
 );
 
 select * from finish();
