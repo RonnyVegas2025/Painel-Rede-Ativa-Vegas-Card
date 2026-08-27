@@ -19,7 +19,8 @@
     "db:reset": "supabase db reset",
     "db:test": "supabase test db",
     "db:types": "supabase gen types typescript --local > src/lib/supabase/database.types.ts",
-    "check": "npm run typecheck && npm run lint && npm run test"
+    "check": "npm run typecheck && npm run lint && npm run test",
+    "ensaio": "bash scripts/ensaio.sh"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

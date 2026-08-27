@@ -328,8 +328,8 @@ select is(
      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public'
       and has_function_privilege('anon', p.oid, 'execute')),
-  array['auth_role()']::text[],
-  'anon executa apenas auth_role(), que a policy avalia antes de o papel existir'
+  null,
+  'anon nao executa funcao alguma de public: nenhuma policy vale para ele'
 );
 
 -- 15. Funcao de trigger nao recebe `execute` de ninguem.

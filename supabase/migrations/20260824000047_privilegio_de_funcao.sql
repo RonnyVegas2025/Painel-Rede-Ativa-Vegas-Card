@@ -105,7 +105,14 @@ grant execute on function public.segment_alias_blockers(uuid) to authenticated;
 -- consulta, entao sem `execute` aqui toda leitura protegida falha.
 grant execute on function public.is_admin() to authenticated;
 grant execute on function public.has_role(public.user_role[]) to authenticated;
-grant execute on function public.auth_role() to authenticated, anon;
+grant execute on function public.auth_role() to authenticated;
+-- `anon` NAO recebe. A primeira versao concedia, com o raciocinio de que a policy
+-- avalia antes de o papel existir. Medido: zero policies valem para `anon`, e as
+-- cinco que chamam `auth_role` sao `to authenticated`. Fluxo completo com a
+-- concessao removida — login, importacao, fila de segmentos, listagem — nao muda
+-- em nada. `anon` fica sem funcao alguma em `public`.
+--
+-- Uma lista com uma excecao justificada por hipotese vira uma lista com tres.
 grant execute on function public.auth_team_id() to authenticated;
 
 -- (c) Avaliadas em COLUNA GERADA e em `check` de constraint. A expressao roda com

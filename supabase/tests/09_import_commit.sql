@@ -19,6 +19,25 @@
 -- planilha real, e sem o prefixo este arquivo aborta em qualquer banco local
 -- onde alguem tenha importado.
 
+-- AS CHAMADAS DE RPC RODAM COM O PAPEL; as fixtures, como superusuario.
+--
+-- A distincao vale para todo pgTAP deste projeto:
+--
+--   assercao de ESQUEMA — indice existe, coluna tem constraint, policy esta
+--   declarada — pode rodar como superusuario: le o catalogo, e o catalogo e o
+--   mesmo para todos.
+--
+--   assercao de COMPORTAMENTO — isto pode ser chamado, aquilo e recusado — precisa
+--   assumir o papel, ou esta medindo o ambiente.
+--
+-- `08_segment_queue_rpc.sql` ficou verde durante uma quebra REAL por rodar tudo
+-- como superusuario: a migration 0047 revogou `execute` de uma auxiliar, a tela
+-- parou, e o teste nao viu. Superusuario nao esbarra em privilegio nenhum.
+--
+-- Semear as fixtures como superusuario e correto, e nao concessao: semear nao e o
+-- comportamento sob teste, e faze-lo sob RLS testaria a policy de INSERT em vez do
+-- commit.
+
 begin;
 select plan(22);
 
@@ -32,11 +51,13 @@ values ('eeeeeeee-0000-4000-8000-00000000000c',
 insert into public.import_jobs (id, file_name, storage_path, scope_city, total_rows)
 values ('11111111-0000-4000-8000-000000000001', 'a.xlsx', 'p/a.xlsx', 'TESTE Cidade', 1);
 
+set local role authenticated;
 select throws_ok(
   $$ select public.import_commit('11111111-0000-4000-8000-000000000001') $$,
   'P0001', null,
   'commit sem usuario identificado e recusado'
 );
+reset role;
 
 -- ===========================================================================
 -- A FRONTEIRA DE PAPEL
@@ -60,12 +81,14 @@ select set_config(
 
 select is(public.is_admin(), false, 'consultor_campo nao tem importacao.executar');
 
+set local role authenticated;
 select throws_ok(
   $$ select public.import_commit('11111111-0000-4000-8000-000000000001') $$,
   '42501',
   null,
   'consultor de campo NAO aplica importacao, mesmo com a funcao sendo definer'
 );
+reset role;
 
 -- NAO ha assercao de "o job nao ficou preso em `aplicando`". Ela foi escrita,
 -- testada e removida: nao ha como ela falhar. A excecao reverte a transacao que
@@ -115,10 +138,12 @@ select is(
   'gravar import_rows nao criou meio de captura'
 );
 
+set local role authenticated;
 select lives_ok(
   $$ select public.import_commit('11111111-0000-4000-8000-000000000001') $$,
   'o commit aplica a previa'
 );
+reset role;
 
 select is(
   (select created_count from public.import_jobs where id = '11111111-0000-4000-8000-000000000001'),
@@ -140,19 +165,23 @@ select is(
 );
 
 -- A definicao e UMA: o que a tela leu e o que o commit marcou.
+set local role authenticated;
 select is(
   (select (public.import_absent_summary('11111111-0000-4000-8000-000000000001') ->> 'ausentes')::integer),
   (select missing_count from public.import_jobs where id = '11111111-0000-4000-8000-000000000001'),
   'o numero que a tela mostra e o mesmo que o commit marcou'
 );
+reset role;
 
 -- ===========================================================================
 -- Repeticao: o estado do job serializa, nada e reaplicado
 -- ===========================================================================
+set local role authenticated;
 select lives_ok(
   $$ select public.import_commit('11111111-0000-4000-8000-000000000001') $$,
   'chamar o commit de novo nao levanta erro — devolve o resultado anterior'
 );
+reset role;
 
 select is(
   (select count(*)::integer from public.establishments where external_contract = 'TESTE-C-1'), 1,
@@ -190,10 +219,12 @@ select '11111111-0000-4000-8000-000000000002', 3, 'inalterado',
        jsonb_build_object('capture_methods', jsonb_build_array('TESTE CIELO')), id
   from public.establishments where external_contract = 'TESTE-C-1';
 
+set local role authenticated;
 select lives_ok(
   $$ select public.import_commit('11111111-0000-4000-8000-000000000002') $$,
   'conflito sem par nao quebra o commit'
 );
+reset role;
 
 select is(
   (select count(*)::integer from public.establishments where trade_name = 'TESTE Mercearia do Carlito'),
@@ -225,11 +256,13 @@ select '11111111-0000-4000-8000-000000000003', 2, 'inalterado',
        jsonb_build_object('capture_methods', '[]'::jsonb), id
   from public.establishments where external_contract = 'TESTE-C-1';
 
+set local role authenticated;
 select throws_ok(
   $$ select public.import_commit('11111111-0000-4000-8000-000000000003') $$,
   'P0001', null,
   'importacao que deixaria 50% do escopo ausente para e exige confirmacao'
 );
+reset role;
 
 -- E ela para ANTES de escrever: o job continua em `previa` e nada foi marcado.
 select is(
@@ -244,10 +277,12 @@ update public.import_jobs
        confirmed_by = 'eeeeeeee-0000-4000-8000-00000000000c'
  where id = '11111111-0000-4000-8000-000000000003';
 
+set local role authenticated;
 select is(
   (select missing_count from public.import_commit('11111111-0000-4000-8000-000000000003')),
   1, 'com confirmacao explicita a importacao aplica e marca o ausente'
 );
+reset role;
 
 
 -- ===========================================================================
@@ -323,10 +358,12 @@ select '11111111-0000-4000-8000-000000000005', 5, 'inalterado',
        jsonb_build_object('capture_methods', '[]'::jsonb), id
   from public.establishments where external_contract = 'TESTE-C-2';
 
+set local role authenticated;
 select lives_ok(
   $$ select public.import_commit('11111111-0000-4000-8000-000000000005') $$,
   'a importacao com os reaparecidos aplica'
 );
+reset role;
 
 select is(
   (select absent_since from public.establishments where id = '44444444-0000-4000-8000-00000000000a'),

@@ -2,6 +2,26 @@
 
 Painel de operações de campo da rede credenciada Vegas Card.
 
+
+## Ensaio de instalação limpa
+
+```bash
+npm run ensaio                                        # ~2 min, sem dados
+ENSAIO_PLANILHA=/caminho/base.xlsx npm run ensaio -- --com-dados
+```
+
+Destrói os volumes, aplica todas as migrations sobre um banco virgem, confere os
+invariantes de instalação limpa, roda a suíte inteira e — com `--com-dados` —
+importa a planilha real **pelas telas**, conferindo as contagens.
+
+**Rode no começo de cada sprint.** Trabalhar semanas sobre o mesmo volume esconde
+defeitos: uma fixture passa por dado que já estava lá, um privilégio parece
+declarado quando foi herdado do ambiente, uma lista de exceções descreve aquele
+banco em vez do schema. Rodado três vezes na Sprint 1, encontrou coisa nas três —
+inclusive 37 funções executáveis por `anon` que nenhuma revisão de código viu.
+
+A planilha real **não** está no repositório: é dado de comércios credenciados.
+
 ## Como subir
 
 ```bash
